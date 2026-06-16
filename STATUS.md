@@ -33,8 +33,33 @@ Living build log for `agent-bus`. Newest first. Kept current as milestones land.
 - **M1** Spec + core model + file transport + schema tests + CI green — **done** ✅
 - **M2** Concurrency-safe claim + multi-agent simulation — **done** ✅
 - **M3** HTTP transport + CLI — **done** ✅
-- **M4** Launch (README, demo, CONTRIBUTING, release) — **in progress** (docs +
-  demo done; pre-release review applied; tagging + release + npm publish next)
+- **M4** Launch (README, demo, CONTRIBUTING, release) — **done** ✅ except npm
+  publish, which is blocked by account 2FA and needs one manual command (below).
+
+### Release (2026-06-16)
+
+- Tagged `v0.1.0` (+ milestone tags `m1`/`m2`/`m3`) and pushed.
+- **GitHub release v0.1.0 is live**: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.1.0
+  with the npm tarball and all three JSON Schemas attached.
+- CI green on Node 20 & 22 for the release commit.
+
+### ⚠️ npm publish — pending one manual step (account 2FA)
+
+`npm publish` returned `E403`: the npm account `aymandakirgh` requires
+two-factor authentication (an OTP) or a granular token with "bypass 2FA" to
+publish. That cannot be done unattended. The package is fully publish-ready
+(`npm publish --dry-run` is clean; 52.8 kB, 24 files, no secrets, maps excluded).
+
+To finish so `npx agent-bus` works, run **one** of:
+
+```bash
+# from the repo root, with your authenticator handy:
+npm publish --access public --otp=<6-digit-code>
+```
+
+or create a granular automation token (npmjs.com → Access Tokens → Granular,
+with "bypass 2FA") and publish with it. Nothing else is required — the GitHub
+release already carries the tarball + schemas as a fallback distribution.
 
 ### Pre-release adversarial review (2026-06-16)
 
