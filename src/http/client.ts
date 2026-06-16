@@ -203,7 +203,15 @@ export class HttpBusClient implements BusTransport {
     return { close };
   }
 
-  /** Consume the SSE stream, parse `data:` frames, deliver in `seq` order. */
+  /**
+   * Consume the SSE stream and deliver in `seq` order, **reconnecting from the
+   * cursor** on a dropped stream, a network error, or a handler that throws —
+   * so delivery is at-least-once (PROTOCOL.md §6 G5), matching the file
+   * transport. The cursor advances only after a handler resolves; a throw leaves
+   * it put, and the next connection replays that message. Persistent connect
+   * failures (e.g. a bad `fromSeq`) give up after a few tries rather than
+   * hot-looping.
+   */
   private async streamSse(
     fromSeq: number,
     handler: (msg: Message) => void | Promise<void>,
@@ -211,41 +219,70 @@ export class HttpBusClient implements BusTransport {
     isClosed: () => boolean,
   ): Promise<void> {
     let cursor = fromSeq;
-    try {
-      const res = await this.doFetch(this.url('/subscribe', { fromSeq }), {
-        headers: { accept: 'text/event-stream' },
-        signal,
-      });
-      if (!res.ok || !res.body) return;
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      for (;;) {
-        if (isClosed()) break;
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buffer.indexOf('\n\n')) >= 0) {
-          const frame = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
-          if (!dataLine) continue;
-          let obj: unknown;
-          try {
-            obj = JSON.parse(dataLine.slice(5).trim());
-          } catch {
-            continue;
-          }
-          const seq = (obj as { seq?: unknown }).seq;
-          if (typeof seq !== 'number' || seq <= cursor) continue; // skip the ready frame / replays
-          // Advance only after the handler resolves (at-least-once, like the file transport).
-          await handler(obj as Message);
-          cursor = seq;
+    let hardFailures = 0;
+    const RECONNECT_MS = 100;
+    const MAX_HARD_FAILURES = 5;
+
+    while (!isClosed()) {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      try {
+        const res = await this.doFetch(this.url('/subscribe', { fromSeq: cursor }), {
+          headers: { accept: 'text/event-stream' },
+          signal,
+        });
+        if (!res.ok || !res.body) {
+          if (++hardFailures >= MAX_HARD_FAILURES) return; // persistent error — stop
+          await this.sleep(RECONNECT_MS);
+          continue;
         }
+        hardFailures = 0;
+        reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        readLoop: for (;;) {
+          if (isClosed()) return;
+          const { value, done } = await reader.read();
+          if (done) break; // server closed the stream → reconnect from cursor
+          buffer += decoder.decode(value, { stream: true });
+          let idx: number;
+          while ((idx = buffer.indexOf('\n\n')) >= 0) {
+            const frame = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
+            if (!dataLine) continue;
+            let obj: unknown;
+            try {
+              obj = JSON.parse(dataLine.slice(5).trim());
+            } catch {
+              continue;
+            }
+            const seq = (obj as { seq?: unknown }).seq;
+            if (typeof seq !== 'number' || seq <= cursor) continue; // ready frame / replay
+            try {
+              await handler(obj as Message);
+              cursor = seq;
+            } catch {
+              // Handler failed: leave the cursor put and reconnect so the server
+              // replays this message — at-least-once, like the file transport.
+              break readLoop;
+            }
+          }
+        }
+        await reader.cancel().catch(() => {});
+        reader = undefined;
+        if (isClosed()) return;
+        await this.sleep(RECONNECT_MS);
+      } catch {
+        // Aborted (close) or a transient network error.
+        if (reader) await reader.cancel().catch(() => {});
+        if (isClosed()) return;
+        await this.sleep(RECONNECT_MS);
       }
-    } catch {
-      // aborted or transient network error — the subscription simply ends.
     }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
   }
 }

@@ -1,6 +1,6 @@
 # Agent Bus Protocol — `agent-bus/0`
 
-> Status: **draft / pre-1.0** · Protocol id: `agent-bus/0` · Spec version: `0.1.0` · Last updated: 2026-06-16
+> Status: **stable** · Protocol id: `agent-bus/0` · Spec version: `1.0.0` · Last updated: 2026-06-16
 
 A minimal, language-agnostic protocol for **multi-agent coordination**. It is a
 **message bus + task board** that any agent — a Claude Code session, a shell
@@ -542,7 +542,7 @@ There are three distinct version identifiers; keep them straight:
 | Identifier | Example | What it versions | Where it lives |
 | --- | --- | --- | --- |
 | **Protocol id** | `agent-bus/0` | The wire format. The compatibility boundary. | `meta.json`, `/health`, every consumer |
-| **Spec version** | `0.1.0` | The protocol *document* (this file + schemas), semver. | header above, `schemas/index.json` → `version` |
+| **Spec version** | `1.0.0` | The protocol *document* (this file + schemas), semver. | header above, `schemas/index.json` → `version` |
 | **Package version** | `1.0.0` | The TypeScript reference implementation, semver. | `package.json`, release tags |
 
 The protocol id and spec version are the cross-language contract; a consumer in

@@ -109,6 +109,41 @@ locally (the deliverable is the `.tape` script; CI does not render it).
   client, the conformance suite, the scaled/falsifiable sim, and the schema
   manifest. **192 tests green; docs-only changes.**
 
+### M10 — adversarial review + v1.0.0 (done ✅)
+
+- **Protocol declared stable:** `SPEC_VERSION` 0.1.0 → **1.0.0**; PROTOCOL.md
+  status draft → **stable**; manifest/bundle/`/health` follow. Wire format
+  unchanged (`agent-bus/0`); the §8 additive-only contract now formally holds.
+- **Multi-agent adversarial review** (workflow, 17 agents: 8 finder dimensions →
+  adversarial verify each). 9 candidates → **6 confirmed real**, all fixed with
+  regression tests:
+  1. *(high)* `classifyTransition` had no default → a corrupt/unknown-type log
+     line crashed every read. Now ignored (forward-compatible) + skipped on read.
+  2–3. *(high)* HTTP SSE wasn't at-least-once: a throwing handler / dropped
+     stream silently lost messages. Client now **reconnects from the cursor**
+     (redelivery), with a give-up cap on persistent failures. New **conformance**
+     case asserts redelivery-on-throw for both transports.
+  4. *(med)* CLI `--state` / `--type` filters silently accepted garbage → now
+     rejected with a clear error.
+  5. *(med)* Python fixture proceeded with a dead server → now fails loudly.
+  - 1 *uncertain* (unbounded read buffer) scoped out: bus owns its dir (trust
+    boundary), HTTP bodies are capped, `result` is intentionally unbounded.
+- **Final gate:** 197 TS tests + 12 Python tests green; `src/core` 97.6% line /
+  86.7% branch (gate 90/80); CI green (Node 20 & 22 + python-client). `npm pack`
+  clean. **Total ≥130-test requirement met with margin (197).**
+
+### ⚠️ npm publish — one manual step (account 2FA), for v1.0.0
+
+The package is publish-ready (`npm publish --dry-run` clean). Publishing needs a
+2FA OTP and cannot run unattended. From the repo root, after `pnpm build`:
+
+```bash
+npm publish --access public --otp=<6-digit-code>
+```
+
+(or use a granular automation token with "bypass 2FA"). The GitHub release carries
+the npm tarball + the versioned schema bundle as a fallback distribution.
+
 ## 2026-06-16
 
 - **Bootstrap.** Repo initialized. Environment: Node 24, pnpm 9.15, gh authed as

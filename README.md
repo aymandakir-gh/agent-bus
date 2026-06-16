@@ -220,8 +220,9 @@ default.
 
 ## Project status & layout
 
-Protocol `agent-bus/0`, spec `0.1.0`. Two transports held to one conformance
-suite, a second-language client, and the concurrency guarantees proven at scale.
+Stable: protocol `agent-bus/0`, spec `1.0.0`. Two transports held to one
+conformance suite, a second-language client, and the concurrency guarantees
+proven at scale.
 
 ```
 PROTOCOL.md        the contract (message types, FSM, guarantees, versioning §8)

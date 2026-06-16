@@ -17,6 +17,7 @@ import { applyTransition, classifyTransition } from './fsm';
 import { newId } from './ids';
 import { assertValidInput, assertValidMessage } from './validate';
 import { BusError, TransitionError } from './errors';
+import { MESSAGE_TYPES } from './types';
 import type {
   Message,
   MessageInput,
@@ -519,8 +520,11 @@ export class FileBus implements BusTransport {
   }
 }
 
+const KNOWN_TYPES: ReadonlySet<string> = new Set(MESSAGE_TYPES);
+
 /** Cheap structural check used on the hot read path (full schema validation
- *  happens on write). */
+ *  happens on write). Requires a *known* message type, so a corrupt or unknown
+ *  -type line is skipped like malformed JSON rather than reaching the FSM. */
 function isStoredShape(x: unknown): x is Message {
   if (typeof x !== 'object' || x === null) return false;
   const m = x as Record<string, unknown>;
@@ -529,6 +533,7 @@ function isStoredShape(x: unknown): x is Message {
     typeof m.seq === 'number' &&
     typeof m.ts === 'string' &&
     typeof m.type === 'string' &&
+    KNOWN_TYPES.has(m.type) &&
     typeof m.agent === 'string'
   );
 }

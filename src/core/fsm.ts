@@ -65,6 +65,13 @@ export function classifyTransition(
     case 'status.update':
     case 'request.help':
       return { ok: true, changed: false };
+
+    default:
+      // An unknown message type (a corrupt line, or a forward-compatible type
+      // from a newer protocol minor) is ignored for FSM purposes rather than
+      // crashing — PROTOCOL.md §8: consumers ignore message types they don't
+      // handle. Reachable only at runtime; the union is exhaustive at compile time.
+      return { ok: true, changed: false };
   }
 }
 

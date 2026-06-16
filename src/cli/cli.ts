@@ -10,7 +10,8 @@ import { resolve } from 'node:path';
 import { FileBus } from '../core/file-bus';
 import { BusError } from '../core/errors';
 import { PROTOCOL_ID, SPEC_VERSION } from '../version';
-import type { Message, MessageInput, MessageType, TaskState, TaskView } from '../core/types';
+import { MESSAGE_TYPES, TASK_STATES } from '../core/types';
+import type { Message, MessageInput, MessageType, TaskView } from '../core/types';
 
 const OPTIONS = {
   dir: { type: 'string' },
@@ -72,6 +73,19 @@ type Values = {
 
 function resolveDir(values: Values): string {
   return resolve(values.dir ?? process.env.AGENT_BUS_DIR ?? '.agentbus');
+}
+
+/** Validate a flag is one of an allowed set; throw a clear error otherwise. */
+function oneOf<T extends string>(
+  raw: string | undefined,
+  allowed: readonly T[],
+  name: string,
+): T | undefined {
+  if (raw === undefined) return undefined;
+  if (!(allowed as readonly string[]).includes(raw)) {
+    throw new Error(`${name} must be one of: ${allowed.join(', ')} (got "${raw}")`);
+  }
+  return raw as T;
 }
 
 /** Parse a non-negative integer flag; throw a clear error (caught at top level). */
@@ -191,20 +205,20 @@ async function main(argv: string[]): Promise<number> {
     }
 
     case 'tasks': {
+      const state = oneOf(v.state, TASK_STATES, '--state');
       const bus = await FileBus.init(resolveDir(v));
-      const tasks = await bus.getTasks(
-        v.state ? { state: v.state as TaskState } : {},
-      );
+      const tasks = await bus.getTasks(state ? { state } : {});
       out(v, renderTasks(tasks), tasks);
       return 0;
     }
 
     case 'messages': {
-      const bus = await FileBus.init(resolveDir(v));
+      const type = oneOf(v.type, MESSAGE_TYPES, '--type');
       const fromSeq = intFlag(v.from, '--from');
       const limit = intFlag(v.limit, '--limit');
+      const bus = await FileBus.init(resolveDir(v));
       const msgs = await bus.getMessages({
-        ...(v.type ? { type: v.type as MessageType } : {}),
+        ...(type ? { type } : {}),
         ...(v.task ? { taskId: v.task } : {}),
         ...(fromSeq !== undefined ? { fromSeq } : {}),
         ...(limit !== undefined ? { limit } : {}),

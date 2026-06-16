@@ -80,12 +80,18 @@ def client():
         raise RuntimeError("could not determine server URL")
 
     c = AgentBusClient(url)
+    healthy = False
     for _ in range(50):
         try:
             if c.health().get("ok"):
+                healthy = True
                 break
         except Exception:
-            time.sleep(0.1)
+            pass
+        time.sleep(0.1)
+    if not healthy:
+        proc.terminate()
+        raise RuntimeError("server started but never became healthy")
     try:
         yield c
     finally:

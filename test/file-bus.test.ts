@@ -144,6 +144,30 @@ describe('FileBus: incremental reads', () => {
     expect(second.map((m) => m.seq)).toEqual(first.map((m) => m.seq));
   });
 
+  it('skips a structurally-valid line with an unknown message type (no crash)', async () => {
+    await bus.post({ type: 'status.update', agent: 'a', text: 'ok' }); // seq 1
+    // A corrupt or forward-compatible line: valid envelope shape, unknown type.
+    const bad =
+      JSON.stringify({
+        id: 'x',
+        seq: 2,
+        ts: new Date().toISOString(),
+        type: 'totally.unknown',
+        agent: 'z',
+        taskId: 't',
+      }) + '\n';
+    await appendFile(bus.logPath, bad, 'utf8');
+
+    // Reads must not throw; the unknown-type line is skipped like corrupt JSON.
+    const msgs = await bus.getMessages();
+    expect(msgs.map((m) => m.type)).toEqual(['status.update']);
+    expect(await bus.getTasks()).toEqual([]);
+
+    // The bus keeps working afterward.
+    const next = await bus.post({ type: 'status.update', agent: 'a', text: 'after' });
+    expect(next.seq).toBe(2);
+  });
+
   it('defensively rebuilds if the log is truncated/replaced underneath it', async () => {
     await bus.post({ type: 'status.update', agent: 'a', text: '1' });
     await bus.post({ type: 'status.update', agent: 'a', text: '2' });

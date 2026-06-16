@@ -5,6 +5,34 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The wire protocol is versioned
 separately as `agent-bus/N` (see [PROTOCOL.md](./PROTOCOL.md)).
 
+## [1.0.0] — 2026-06-16
+
+**Stable.** The protocol spec is declared **`1.0.0`** (`SPEC_VERSION`): within
+`agent-bus/0` the contract is now backward-compatible and additive-only (§8).
+Preceded by a multi-agent adversarial review (17 agents, find → adversarially
+verify); every confirmed finding is fixed with a regression test.
+
+### Fixed (from the adversarial review)
+- **Reads no longer crash on a corrupt/unknown message type.** A structurally-valid
+  log line with an unknown `type` reached `classifyTransition` (no default case)
+  and threw. `classifyTransition` now ignores unknown types (forward-compatible,
+  §8) and the read path skips such lines like malformed JSON. *(high)*
+- **HTTP subscriptions are now at-least-once (G5), like the file transport.** The
+  SSE client now **reconnects from its cursor** when the handler throws, the
+  stream drops, or the connection errors — so a message is redelivered, never
+  silently lost. Persistent connect failures (e.g. a bad `fromSeq`) give up after
+  a few tries instead of failing silently. A new **conformance** case asserts
+  redelivery-on-throw for *both* transports. *(high ×2)*
+- **CLI rejects invalid `--state` / `--type` filters** with a clear error instead
+  of silently returning empty. *(medium ×2)*
+- **Python test fixture fails loudly** if the server never becomes healthy,
+  instead of running tests against a dead client. *(medium)*
+
+### Notes
+- Considered and scoped out: an unbounded read buffer for a hand-written giant log
+  line. The bus owns its data directory (its trust boundary); HTTP bodies are
+  capped by Fastify; the `result` field is intentionally unbounded by the protocol.
+
 ## [0.6.0] — 2026-06-16
 
 Launch polish: demo, docs, templates. Wire format unchanged (`agent-bus/0`).
@@ -132,6 +160,7 @@ First release. Protocol `agent-bus/0`.
   multi-process concurrency simulation proving single-claimer & ordering.
 - **Example**: the two-terminal shared-folder demo (`examples/shared-folder`).
 
+[1.0.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v1.0.0
 [0.6.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.6.0
 [0.5.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.5.0
 [0.4.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.4.0

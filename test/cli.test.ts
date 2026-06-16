@@ -92,6 +92,19 @@ describe('cli: end-to-end over a folder', () => {
     expect(r.stderr).toContain('--result');
   });
 
+  it('rejects an invalid --state filter instead of returning empty', () => {
+    cli('create-task', '--title', 'X', '--agent', 'lead', '--task', 't1');
+    const r = cli('tasks', '--state', 'opn'); // typo for "open"
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('--state');
+  });
+
+  it('rejects an invalid --type filter instead of returning empty', () => {
+    const r = cli('messages', '--type', 'status.updat'); // typo for "status.update"
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('--type');
+  });
+
   it('claim with a stable --id is idempotent on retry', () => {
     cli('create-task', '--title', 'X', '--agent', 'lead', '--task', 't1');
     const first = cli('claim', 't1', '--agent', 'w1', '--id', 'claim-key-1');

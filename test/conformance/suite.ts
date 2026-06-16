@@ -490,6 +490,36 @@ export function defineConformanceSuite(name: string, make: MakeTransport): void 
         expect(got).toEqual([3, 4]);
       });
 
+      it('redelivers a message when the handler throws (at-least-once, G5)', async () => {
+        await t.post({ type: 'status.update', agent: 'a', text: 'm1' });
+        const seen: number[] = [];
+        let threwOnce = false;
+        const got = await new Promise<number[]>((resolve, reject) => {
+          const sub = t.subscribe(
+            (m) => {
+              if (m.seq === 1 && !threwOnce) {
+                threwOnce = true;
+                throw new Error('transient handler failure');
+              }
+              seen.push(m.seq);
+              cleanup();
+              resolve(seen.slice());
+            },
+            { fromSeq: 0, intervalMs: 20 },
+          );
+          const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('message was not redelivered after the handler threw'));
+          }, 8_000);
+          function cleanup(): void {
+            clearTimeout(timer);
+            sub.close();
+          }
+        });
+        expect(threwOnce).toBe(true);
+        expect(got).toEqual([1]); // delivered on retry, not skipped
+      });
+
       it('stops delivering after the subscription is closed', async () => {
         const seen: number[] = [];
         const sub = t.subscribe((m) => void seen.push(m.seq), { fromSeq: 0, intervalMs: 20 });
