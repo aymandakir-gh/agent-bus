@@ -1,0 +1,4 @@
+# Test-only dependencies for the Python reference client. The client itself
+# (agentbus/) uses the standard library only.
+jsonschema>=4.18
+pytest>=8.0

@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The wire protocol is versioned
 separately as `agent-bus/N` (see [PROTOCOL.md](./PROTOCOL.md)).
 
+## [0.4.0] — 2026-06-16
+
+A second-language client. Proves the protocol is language-agnostic and the JSON
+Schemas are a real shared contract. Wire format unchanged (`agent-bus/0`).
+
+### Added
+- **Python reference client** (`clients/python/agentbus/`) — a minimal,
+  standard-library-only client for the HTTP transport (request/response + SSE),
+  mapping reason codes to a typed `AgentBusError`.
+- **Cross-language conformance tests** (`clients/python/tests/`) — start the
+  built TypeScript server, drive it through the Python client, and validate every
+  returned message and task view against the **published** `schemas/*.json` with
+  `jsonschema` (Draft 2020-12). A drift between the TS server and the schemas
+  fails the suite — there is no TS-only behaviour.
+- **CI job `python-client`** runs the above on every push.
+
 ## [0.3.0] — 2026-06-16
 
 Concurrency at scale, and a falsifiable lock. Wire format unchanged
@@ -78,6 +94,7 @@ First release. Protocol `agent-bus/0`.
   multi-process concurrency simulation proving single-claimer & ordering.
 - **Example**: the two-terminal shared-folder demo (`examples/shared-folder`).
 
+[0.4.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.4.0
 [0.3.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.3.0
 [0.2.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.1.0

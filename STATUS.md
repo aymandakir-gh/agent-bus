@@ -65,6 +65,20 @@ locally (the deliverable is the `.tape` script; CI does not render it).
 - **Coverage gate** wired into CI (`pnpm test:coverage`): `src/core` 97.7% line /
   86.5% branch — over the 90/80 v1.0.0 gate. **189 tests green.**
 
+### M7 — Python reference client → v0.4.0 (done ✅)
+
+- **`clients/python/agentbus/`** — a stdlib-only Python client (urllib + json) for
+  the HTTP transport: full lifecycle + filters + SSE `subscribe`, reason codes via
+  a typed `AgentBusError`. No third-party runtime deps.
+- **`clients/python/tests/test_conformance.py`** (12 tests, pytest) spawns the
+  *built* TS server (`node dist/cli.js serve --port 0`), drives it through the
+  Python client, and validates every returned message + task view against the
+  **published** `schemas/*.json` via `jsonschema` (Draft 2020-12). Proves no
+  TS↔schema drift across languages; includes a 10-thread single-claimer race.
+- **New CI job `python-client`** builds the package and runs the pytest suite on
+  every push (Node 22 + Python 3.12). 12 Python tests green locally against the
+  built server.
+
 ## 2026-06-16
 
 - **Bootstrap.** Repo initialized. Environment: Node 24, pnpm 9.15, gh authed as

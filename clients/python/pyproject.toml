@@ -1,0 +1,21 @@
+[project]
+name = "agentbus"
+version = "0.1.0"
+description = "Minimal Python reference client for the agent-bus/0 HTTP transport"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = []  # standard library only
+
+[project.optional-dependencies]
+dev = ["jsonschema>=4.18", "pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["agentbus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
