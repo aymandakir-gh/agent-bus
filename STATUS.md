@@ -31,9 +31,22 @@ Living build log for `agent-bus`. Newest first. Kept current as milestones land.
 ### Milestone status
 
 - **M1** Spec + core model + file transport + schema tests + CI green — **done** ✅
-- **M2** Concurrency-safe claim + multi-agent simulation — _next_
-- **M3** HTTP transport + CLI — _not started_
+- **M2** Concurrency-safe claim + multi-agent simulation — **done** ✅
+- **M3** HTTP transport + CLI — _next_
 - **M4** Launch (README, demo, CONTRIBUTING, release) — _not started_
+
+### M2 results (2026-06-16)
+
+- Lock tests: mutual exclusion (no lost updates, never two holders), stale
+  recovery (dead pid / age / garbage file), timeout, release-on-throw, token
+  ownership on release.
+- In-process burst: exactly one of 25 concurrent claims wins; rest `not_open`.
+- In-process drain: 8 agents over 30 tasks — each claimed once, all completed.
+- **Multi-process simulation**: 6 OS processes (`node --import tsx`) racing over
+  40 tasks via one folder — gapless/unique `seq`, exactly one claim per task, all
+  done, completed-by-claimer. Stable across repeated runs.
+- Stress check (one-off): 12 processes, 80 tasks, chaos=6ms → 332 messages,
+  gapless, zero double-claims, all done, work spread across all 12 agents, ~1.6s.
 
 ### M1 results (2026-06-16)
 
