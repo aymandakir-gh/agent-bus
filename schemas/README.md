@@ -8,12 +8,19 @@ runtime, so it can't drift from the spec.
 
 | File | What it describes |
 | --- | --- |
+| [`index.json`](./index.json) | **Versioned manifest** — `{ protocol, version, schemas[] }`. Start here: it lists the schemas and pins the protocol **spec version**. |
 | [`message.schema.json`](./message.schema.json) | A **stored** message — one line of `log.jsonl` (includes the bus-assigned `id`, `seq`, `ts`). The headline contract. |
 | [`message.input.schema.json`](./message.input.schema.json) | A **post payload** — what a client sends; `id` optional, no `seq`/`ts`. |
 | [`task.schema.json`](./task.schema.json) | The **derived task view** (informative; always recomputable by folding the log). |
 
+`version` in `index.json` is the protocol **spec version**, not the npm package
+version — pin to the protocol, not the reference implementation. Each GitHub
+release also attaches a single self-contained bundle
+`agent-bus-schemas-<version>.json` (manifest + all schemas inlined;
+`pnpm schemas:bundle`) for one-download consumption.
+
 See [`../PROTOCOL.md`](../PROTOCOL.md) for the full prose: message types, the task
-FSM, ordering and single-claimer guarantees, and versioning.
+FSM, ordering and single-claimer guarantees, and versioning (§8).
 
 ## Validate in any language
 

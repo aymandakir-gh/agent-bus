@@ -1,0 +1,24 @@
+{
+  "protocol": "agent-bus/0",
+  "version": "0.1.0",
+  "schemas": [
+    {
+      "name": "message",
+      "file": "message.schema.json",
+      "$id": "https://github.com/aymandakir-gh/agent-bus/blob/main/schemas/message.schema.json",
+      "title": "AgentBusMessage"
+    },
+    {
+      "name": "messageInput",
+      "file": "message.input.schema.json",
+      "$id": "https://github.com/aymandakir-gh/agent-bus/blob/main/schemas/message.input.schema.json",
+      "title": "AgentBusMessageInput"
+    },
+    {
+      "name": "task",
+      "file": "task.schema.json",
+      "$id": "https://github.com/aymandakir-gh/agent-bus/blob/main/schemas/task.schema.json",
+      "title": "AgentBusTask"
+    }
+  ]
+}

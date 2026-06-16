@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 
-import { messageSchema, taskSchema, SCHEMA_FILES } from '../src/core/schemas';
+import {
+  messageSchema,
+  taskSchema,
+  SCHEMA_FILES,
+  schemaManifest,
+  buildSchemaBundle,
+} from '../src/core/schemas';
+import { PROTOCOL_ID, SPEC_VERSION } from '../src/version';
 import {
   isValidMessage,
   isValidInput,
@@ -110,6 +117,29 @@ describe('schema: drift between source, schemas/, and PROTOCOL.md', () => {
       'task.schema.json',
     ]);
     expect(taskSchema['title']).toBe('AgentBusTask');
+  });
+});
+
+describe('schema: versioned manifest & bundle', () => {
+  it('schemas/index.json matches the in-code manifest (no drift)', () => {
+    const onDisk = JSON.parse(readFileSync(join(root, 'schemas', 'index.json'), 'utf8'));
+    expect(onDisk, 'schemas/index.json is stale — run pnpm gen:schemas').toEqual(schemaManifest);
+  });
+
+  it('the manifest version is the protocol spec version, not the package version', () => {
+    expect(schemaManifest.protocol).toBe(PROTOCOL_ID);
+    expect(schemaManifest.version).toBe(SPEC_VERSION);
+    expect(schemaManifest.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(schemaManifest.schemas.map((s) => s.name)).toEqual(['message', 'messageInput', 'task']);
+  });
+
+  it('the release bundle inlines all schemas under a version', () => {
+    const bundle = buildSchemaBundle();
+    expect(bundle.protocol).toBe(PROTOCOL_ID);
+    expect(bundle.version).toBe(SPEC_VERSION);
+    expect(Object.keys(bundle.schemas)).toEqual(['message', 'messageInput', 'task']);
+    expect(bundle.schemas['message']).toEqual(messageSchema);
+    expect(bundle.schemas['task']).toEqual(taskSchema);
   });
 });
 

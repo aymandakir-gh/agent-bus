@@ -7,7 +7,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { SCHEMA_FILES } from '../core/schemas';
+import { SCHEMA_FILES, schemaManifest } from '../core/schemas';
 
 const root = process.cwd();
 
@@ -25,6 +25,11 @@ async function main(): Promise<void> {
     await writeFile(join(schemasDir, file), JSON.stringify(schema, null, 2) + '\n');
     console.log(`wrote schemas/${file}`);
   }
+
+  // Versioned manifest for cross-language consumers (protocol + spec version +
+  // schema file list). Drift-tested in test/schema.test.ts.
+  await writeFile(join(schemasDir, 'index.json'), JSON.stringify(schemaManifest, null, 2) + '\n');
+  console.log('wrote schemas/index.json');
 
   const protoPath = join(root, 'PROTOCOL.md');
   let doc = await readFile(protoPath, 'utf8');

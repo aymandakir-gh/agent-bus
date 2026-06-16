@@ -19,6 +19,10 @@ export {
   taskSchema,
   defKey,
   SCHEMA_FILES,
+  schemaManifest,
+  buildSchemaBundle,
+  type SchemaManifestEntry,
+  type SchemaBundle,
 } from './core/schemas';
 export {
   validateMessage,

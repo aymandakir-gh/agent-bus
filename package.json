@@ -1,6 +1,6 @@
 {
   "name": "agent-bus",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A message bus + task board for teams of agents — over nothing but a shared folder. An open protocol for multi-agent coordination, with a TypeScript reference implementation.",
   "keywords": [
     "agents",
@@ -64,6 +64,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "gen:schemas": "tsx src/scripts/gen-schemas.ts",
+    "schemas:bundle": "tsx src/scripts/bundle-schemas.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

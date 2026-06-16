@@ -537,16 +537,50 @@ these guarantees; a lost claim race surfaces as HTTP `409 Conflict`.
 
 ## 8. Versioning & compatibility
 
-- **Protocol id** `agent-bus/0` identifies this wire format. Spec version
-  `0.1.0` follows semver *for the spec document*.
+There are three distinct version identifiers; keep them straight:
+
+| Identifier | Example | What it versions | Where it lives |
+| --- | --- | --- | --- |
+| **Protocol id** | `agent-bus/0` | The wire format. The compatibility boundary. | `meta.json`, `/health`, every consumer |
+| **Spec version** | `0.1.0` | The protocol *document* (this file + schemas), semver. | header above, `schemas/index.json` → `version` |
+| **Package version** | `1.0.0` | The TypeScript reference implementation, semver. | `package.json`, release tags |
+
+The protocol id and spec version are the cross-language contract; a consumer in
+any language pins to **those**, never to the npm package version.
+
+### The versioned contract artifact
+
+The canonical schemas live in [`schemas/`](./schemas). Cross-language consumers
+discover them through a versioned manifest, [`schemas/index.json`](./schemas/index.json):
+
+```json
+{ "protocol": "agent-bus/0", "version": "<spec>", "schemas": [ { "name": "message", "file": "message.schema.json", "$id": "…", "title": "…" }, … ] }
+```
+
+`schemas/index.json` `version` is the **spec version**, not the package version.
+Each release also attaches a single self-contained bundle,
+`agent-bus-schemas-<version>.json` (manifest + all schemas inlined;
+`pnpm schemas:bundle`), for consumers who want one download. A test asserts the
+manifest never drifts from the schemas.
+
+### Compatibility rules
+
 - A bus directory carries a `meta.json`: `{ "protocol": "agent-bus/0",
   "version": "<spec>", "created": "<ts>" }`.
-- **Within `agent-bus/0`**, changes are **additive only**: new optional fields,
-  new message types. Consumers SHOULD ignore unknown top-level fields and
-  unknown message types they don't handle (forward compatibility). The strict
-  reference validator rejects unknown fields to catch bugs — use the `meta`
-  object for custom data instead of inventing top-level keys.
-- A breaking change bumps the protocol id to `agent-bus/1`.
+- **Within a protocol id, changes are additive only**: new optional fields and
+  new message types may be introduced; existing fields never change meaning,
+  type, or get removed. Such changes bump the **spec version**’s minor.
+- **Forward compatibility:** consumers SHOULD ignore unknown top-level fields and
+  unknown message types they don't handle, so a new field/type never breaks an
+  old reader. (The strict reference *validator* rejects unknown fields to catch
+  bugs early — put custom data under the `meta` object, the sanctioned extension
+  point, rather than inventing top-level keys.)
+- **Backward compatibility:** a message valid under spec `X.Y` remains valid
+  under `X.Z` (Z ≥ Y). Schemas only loosen (add optional fields), never tighten,
+  within a protocol id.
+- **A breaking change bumps the protocol id** to `agent-bus/1` (and resets the
+  spec version). Buses of different protocol ids do not interoperate; a consumer
+  MUST check the `protocol` field before trusting a bus.
 
 ---
 

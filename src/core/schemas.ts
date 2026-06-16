@@ -10,6 +10,7 @@
  * any drift between this module, `schemas/`, and `PROTOCOL.md`.
  */
 import { MESSAGE_TYPES, type MessageType } from './types';
+import { PROTOCOL_ID, SPEC_VERSION } from '../version';
 
 const REPO = 'https://github.com/aymandakir-gh/agent-bus/blob/main/schemas';
 
@@ -227,11 +228,57 @@ export const taskSchema: Json = {
 
 /** Named artifacts emitted to `schemas/` and mirrored into `PROTOCOL.md`. */
 export const SCHEMA_FILES: ReadonlyArray<{
+  name: string;
   file: string;
   marker: string;
   schema: Json;
 }> = [
-  { file: 'message.schema.json', marker: 'message', schema: messageSchema },
-  { file: 'message.input.schema.json', marker: 'message-input', schema: messageInputSchema },
-  { file: 'task.schema.json', marker: 'task', schema: taskSchema },
+  { name: 'message', file: 'message.schema.json', marker: 'message', schema: messageSchema },
+  { name: 'messageInput', file: 'message.input.schema.json', marker: 'message-input', schema: messageInputSchema },
+  { name: 'task', file: 'task.schema.json', marker: 'task', schema: taskSchema },
 ];
+
+export interface SchemaManifestEntry {
+  name: string;
+  file: string;
+  $id: string;
+  title: string;
+}
+
+/**
+ * A versioned manifest of the published contract, written to `schemas/index.json`.
+ * `version` is the **protocol spec version** (`SPEC_VERSION`), not the npm package
+ * version — cross-language consumers pin to the protocol, not the reference impl.
+ * A test asserts the on-disk manifest tracks this object (no drift).
+ */
+export const schemaManifest: {
+  protocol: string;
+  version: string;
+  schemas: SchemaManifestEntry[];
+} = {
+  protocol: PROTOCOL_ID,
+  version: SPEC_VERSION,
+  schemas: SCHEMA_FILES.map(({ name, file, schema }) => ({
+    name,
+    file,
+    $id: schema['$id'] as string,
+    title: schema['title'] as string,
+  })),
+};
+
+export interface SchemaBundle {
+  protocol: string;
+  version: string;
+  schemas: Record<string, Json>;
+}
+
+/** A single self-contained, versioned artifact (manifest + all schemas inlined)
+ *  for cross-language consumers who want one download. Emitted by
+ *  `pnpm schemas:bundle` and attached to each GitHub release. */
+export function buildSchemaBundle(): SchemaBundle {
+  return {
+    protocol: PROTOCOL_ID,
+    version: SPEC_VERSION,
+    schemas: Object.fromEntries(SCHEMA_FILES.map(({ name, schema }) => [name, schema])),
+  };
+}
