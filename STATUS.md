@@ -32,8 +32,26 @@ Living build log for `agent-bus`. Newest first. Kept current as milestones land.
 
 - **M1** Spec + core model + file transport + schema tests + CI green — **done** ✅
 - **M2** Concurrency-safe claim + multi-agent simulation — **done** ✅
-- **M3** HTTP transport + CLI — _next_
-- **M4** Launch (README, demo, CONTRIBUTING, release) — _not started_
+- **M3** HTTP transport + CLI — **done** ✅
+- **M4** Launch (README, demo, CONTRIBUTING, release) — _next_
+
+### M3 results (2026-06-16)
+
+- HTTP transport: thin Fastify layer over the same `FileBus`, inheriting all
+  guarantees. Routes: health/meta, POST/GET messages, GET tasks(+`:id`),
+  POST tasks + `/claim` `/complete` `/block` `/release` `/cancel`, SSE
+  `/subscribe`. Errors map by code: validation→400, transition→409 (lost claim),
+  not_found→404, lock_timeout→503. Binds 127.0.0.1.
+- CLI (`node:util.parseArgs`, zero runtime deps; `serve` lazy-imports Fastify):
+  init/create-task/tasks/claim/complete/block/release/cancel/post/messages/
+  watch/serve. `claim` exits 0 on win, 1 on lost race.
+- Tests: http.test.ts (9) incl. **single-claimer over the network path** (one of
+  20 concurrent claim requests → 201, rest 409) and SSE streaming; cli.test.ts
+  (6) full lifecycle e2e via spawned processes. 79 tests total.
+- **Build gotcha fixed:** ajv deep import needed `ajv/dist/2020.js` (explicit
+  extension) to resolve in bundled Node ESM. Caught by smoke-testing the *built*
+  `dist/cli.js` — the test bundler had masked it. Verified `node dist/cli.js`
+  lifecycle + live `serve` (health 200, POST 201).
 
 ### M2 results (2026-06-16)
 

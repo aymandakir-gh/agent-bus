@@ -3,7 +3,9 @@
  * it publishes (`schemas.ts`), so the implementation can never drift from the
  * contract.
  */
-import Ajv2020, { type ValidateFunction } from 'ajv/dist/2020';
+// Deep import needs the explicit .js extension to resolve under Node ESM once
+// bundled (ajv ships no "exports" map).
+import Ajv2020, { type ValidateFunction } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 
 import { messageSchema, messageInputSchema } from './schemas';
