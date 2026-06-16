@@ -34,7 +34,36 @@ Living build log for `agent-bus`. Newest first. Kept current as milestones land.
 - **M2** Concurrency-safe claim + multi-agent simulation — **done** ✅
 - **M3** HTTP transport + CLI — **done** ✅
 - **M4** Launch (README, demo, CONTRIBUTING, release) — **in progress** (docs +
-  demo done; tagging + release + npm publish next)
+  demo done; pre-release review applied; tagging + release + npm publish next)
+
+### Pre-release adversarial review (2026-06-16)
+
+Ran a multi-agent review (28 agents: 4 dimensions × find → adversarial verify):
+concurrency, protocol/contract consistency, impl correctness, release readiness.
+17 findings confirmed; all addressed:
+
+- **Concurrency (root cause, high):** the lock could be stolen from a *live but
+  slow* same-host holder on wall-clock age, and `post()` never re-checked
+  ownership before appending → a theoretical duplicate-`seq`/double-claim window
+  (also the source of the idempotency-across-steal and release-TOCTOU findings).
+  **Fix:** same-host stealing now gates on process liveness only (`kill(pid,0)`)
+  — a live holder is never stolen; age is used only cross-host (unknowable
+  liveness) or for a garbage lock file. Added `LockHandle.isOwned()` and a
+  `post()` retry loop that re-verifies continuous ownership immediately before
+  the append, discarding+retrying a stolen critical section. (Closes #1–#5.)
+- **Subscriptions (high):** the cursor advanced *before* the handler ran, so a
+  throwing handler dropped a message. **Fix:** advance after success → true
+  at-least-once. SSE writer now handles backpressure + write errors and closes
+  cleanly. (#9, #10)
+- **Input validation:** NaN from bad numeric query params / CLI flags silently
+  misbehaved. **Fix:** HTTP returns 400; CLI fails with a clear message. (#11,#12)
+- **Ergonomics/docs/packaging:** `--id` idempotency flag on the CLI; clean JSON
+  errors; §3 table + reason-code subsection in PROTOCOL.md; task-schema tags
+  constraints; source maps excluded from the npm tarball (109→53 kB) and
+  docs/examples included so README links resolve in-package. (#6–#8, #13–#17)
+
+86 tests green (added 7). Concurrency re-stress after the lock change: 12 procs /
+80 tasks / chaos=6ms → gapless, unique ids, zero double-claims, all done.
 
 ### M3 results (2026-06-16)
 

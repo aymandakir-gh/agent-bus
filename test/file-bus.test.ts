@@ -145,4 +145,27 @@ describe('FileBus: subscriptions', () => {
     await done;
     expect(received).toEqual([2, 3, 4]);
   });
+
+  it('retries delivery when the handler throws (at-least-once)', async () => {
+    await bus.post({ type: 'status.update', agent: 'a', text: 'm1' }); // seq 1
+    const seen: number[] = [];
+    let failedOnce = false;
+    await new Promise<void>((resolve) => {
+      const sub = bus.subscribe(
+        (m) => {
+          if (m.seq === 1 && !failedOnce) {
+            failedOnce = true;
+            throw new Error('transient handler failure');
+          }
+          seen.push(m.seq);
+          sub.close();
+          resolve();
+        },
+        { fromSeq: 0, intervalMs: 20 },
+      );
+    });
+    // The message that threw is redelivered rather than skipped.
+    expect(seen).toEqual([1]);
+    expect(failedOnce).toBe(true);
+  });
 });

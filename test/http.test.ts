@@ -97,6 +97,12 @@ describe('http: error mapping', () => {
     const res = await fetch(url + '/tasks/nope');
     expect(res.status).toBe(404);
   });
+
+  it('400 on a non-integer numeric query param', async () => {
+    expect((await fetch(url + '/messages?fromSeq=abc')).status).toBe(400);
+    expect((await fetch(url + '/messages?limit=-3')).status).toBe(400);
+    expect((await fetch(url + '/subscribe?fromSeq=NaN')).status).toBe(400);
+  });
 });
 
 describe('http: single-claimer over the network path', () => {

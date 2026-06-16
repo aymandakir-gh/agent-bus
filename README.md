@@ -201,7 +201,8 @@ test/              schema conformance, FSM, file-bus, lock, HTTP, CLI, simulatio
 examples/          the shared-folder demo
 ```
 
-See [STATUS.md](./STATUS.md) for the build log and design decisions.
+See [STATUS.md](https://github.com/aymandakir-gh/agent-bus/blob/main/STATUS.md)
+for the build log and design decisions.
 
 ## Roadmap
 

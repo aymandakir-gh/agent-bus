@@ -25,6 +25,7 @@ const OPTIONS = {
   type: { type: 'string' },
   result: { type: 'string' },
   input: { type: 'string' },
+  id: { type: 'string' },
   from: { type: 'string' },
   limit: { type: 'string' },
   state: { type: 'string' },
@@ -46,7 +47,8 @@ Commands:
   create-task --title <t> --agent <a> [--task <id>] [--desc <d>]
                                      [--priority low|normal|high] [--tags a,b]
   tasks [--state <s>] [--json]       List tasks (optionally filter by state)
-  claim <taskId> --agent <a>         Claim a task (exit 0 = won, 1 = lost)
+  claim <taskId> --agent <a> [--id <key>]   Claim a task (exit 0 = won, 1 = lost;
+                                     --id is a stable idempotency key for retries)
   complete <taskId> --agent <a> [--result <json>]
   block <taskId> --agent <a> --reason <r>
   release <taskId> --agent <a>
@@ -70,6 +72,25 @@ type Values = {
 
 function resolveDir(values: Values): string {
   return resolve(values.dir ?? process.env.AGENT_BUS_DIR ?? '.agentbus');
+}
+
+/** Parse a non-negative integer flag; throw a clear error (caught at top level). */
+function intFlag(raw: string | undefined, name: string): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error(`${name} must be a non-negative integer (got "${raw}")`);
+  }
+  return n;
+}
+
+/** JSON.parse with a clear, flag-attributed error message. */
+function parseJsonFlag(raw: string, name: string): unknown {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (e) {
+    throw new Error(`${name} must be valid JSON: ${(e as Error).message}`);
+  }
 }
 
 function out(values: Values, human: string, data: unknown): void {
@@ -123,10 +144,12 @@ async function main(argv: string[]): Promise<number> {
 
     case 'serve': {
       const { startServer } = await import('../http/server');
+      const port = intFlag(v.port, '--port');
+      if (port !== undefined && port > 65535) throw new Error('--port must be 0-65535');
       const { url } = await startServer({
         dir: resolveDir(v),
-        port: v.port ? Number(v.port) : undefined,
-        host: v.host,
+        ...(port !== undefined ? { port } : {}),
+        ...(v.host ? { host: v.host } : {}),
       });
       process.stdout.write(`agent-bus serving ${resolveDir(v)} at ${url}\n`);
       process.stdout.write('press Ctrl-C to stop\n');
@@ -136,7 +159,7 @@ async function main(argv: string[]): Promise<number> {
 
     case 'watch': {
       const bus = await FileBus.init(resolveDir(v));
-      const fromSeq = v.from ? Number(v.from) : 0;
+      const fromSeq = intFlag(v.from, '--from') ?? 0;
       process.stdout.write(`watching ${resolveDir(v)} (from seq ${fromSeq})\n`);
       await new Promise<void>((res) => {
         const sub = bus.subscribe(
@@ -161,6 +184,7 @@ async function main(argv: string[]): Promise<number> {
         ...(v.desc ? { description: v.desc } : {}),
         ...(v.priority ? { priority: v.priority as 'low' | 'normal' | 'high' } : {}),
         ...(v.tags ? { tags: v.tags.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
+        ...(v.id ? { id: v.id } : {}),
       });
       out(v, `created task ${msg.taskId} (${msg.title})`, msg);
       return 0;
@@ -177,11 +201,13 @@ async function main(argv: string[]): Promise<number> {
 
     case 'messages': {
       const bus = await FileBus.init(resolveDir(v));
+      const fromSeq = intFlag(v.from, '--from');
+      const limit = intFlag(v.limit, '--limit');
       const msgs = await bus.getMessages({
         ...(v.type ? { type: v.type as MessageType } : {}),
         ...(v.task ? { taskId: v.task } : {}),
-        ...(v.from ? { fromSeq: Number(v.from) } : {}),
-        ...(v.limit ? { limit: Number(v.limit) } : {}),
+        ...(fromSeq !== undefined ? { fromSeq } : {}),
+        ...(limit !== undefined ? { limit } : {}),
       });
       out(v, msgs.map(summarize).join('\n') || '(no messages)', msgs);
       return 0;
@@ -191,7 +217,7 @@ async function main(argv: string[]): Promise<number> {
       const bus = await FileBus.init(resolveDir(v));
       const taskId = positionals[1] ?? v.task;
       if (!taskId || !v.agent) return fail('claim requires <taskId> and --agent');
-      const res = await bus.claim(taskId, v.agent);
+      const res = await bus.claim(taskId, v.agent, v.id ? { id: v.id } : {});
       if (res.ok) {
         out(v, `claimed ${taskId} as ${v.agent}`, res);
         return 0;
@@ -209,7 +235,7 @@ async function main(argv: string[]): Promise<number> {
       if (!taskId || !v.agent) return fail(`${cmd} requires <taskId> and --agent`);
       let msg: Message;
       if (cmd === 'complete') {
-        const result = v.result ? (JSON.parse(v.result) as unknown) : undefined;
+        const result = v.result ? parseJsonFlag(v.result, '--result') : undefined;
         msg = await bus.complete(taskId, v.agent, result);
       } else if (cmd === 'block') {
         if (!v.reason) return fail('block requires --reason');
@@ -227,7 +253,7 @@ async function main(argv: string[]): Promise<number> {
       const bus = await FileBus.init(resolveDir(v));
       let input: MessageInput;
       if (v.input) {
-        input = JSON.parse(v.input) as MessageInput;
+        input = parseJsonFlag(v.input, '--input') as MessageInput;
       } else {
         if (!v.type || !v.agent) return fail('post requires --type and --agent (or --input <json>)');
         input = {
@@ -237,6 +263,7 @@ async function main(argv: string[]): Promise<number> {
           ...(v.text ? { text: v.text } : {}),
           ...(v.title ? { title: v.title } : {}),
           ...(v.reason ? { reason: v.reason } : {}),
+          ...(v.id ? { id: v.id } : {}),
         } as MessageInput;
       }
       const msg = await bus.post(input);

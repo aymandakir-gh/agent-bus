@@ -27,6 +27,19 @@ function asArray<T>(v: T | T[] | undefined): T[] | undefined {
   return Array.isArray(v) ? v : [v];
 }
 
+/** Parse a non-negative integer query param, or throw a 400-mapped error. */
+function intParam(value: string | string[] | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new ValidationError(`query parameter "${name}" must be a non-negative integer`, [
+      `${name}=${String(raw)}`,
+    ]);
+  }
+  return n;
+}
+
 export function createServer(options: CreateServerOptions): FastifyInstance {
   const { bus } = options;
   const app = Fastify({ logger: options.logger ?? false });
@@ -45,11 +58,11 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
   app.get('/messages', async (req) => {
     const q = req.query as Record<string, string | string[] | undefined>;
     return bus.getMessages({
-      fromSeq: q.fromSeq !== undefined ? Number(q.fromSeq) : undefined,
+      fromSeq: intParam(q.fromSeq, 'fromSeq'),
       type: asArray(q.type) as MessageType[] | undefined,
       taskId: typeof q.taskId === 'string' ? q.taskId : undefined,
       agent: typeof q.agent === 'string' ? q.agent : undefined,
-      limit: q.limit !== undefined ? Number(q.limit) : undefined,
+      limit: intParam(q.limit, 'limit'),
     });
   });
 
@@ -124,7 +137,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
   // ---- subscriptions (Server-Sent Events) ----
   app.get('/subscribe', (req, reply) => {
     const q = req.query as Record<string, string | undefined>;
-    const fromSeq = q.fromSeq !== undefined ? Number(q.fromSeq) : 0;
+    const fromSeq = intParam(q.fromSeq, 'fromSeq') ?? 0; // throws 400 before hijack
 
     reply.hijack();
     const res = reply.raw;
@@ -135,13 +148,10 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
     });
     res.write('event: ready\ndata: {"ok":true}\n\n');
 
-    const sub = bus.subscribe(
-      (m) => {
-        res.write(`data: ${JSON.stringify(m)}\n\n`);
-      },
-      { fromSeq },
-    );
+    let closed = false;
     const close = (): void => {
+      if (closed) return;
+      closed = true;
       sub.close();
       try {
         res.end();
@@ -149,6 +159,42 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
         // already closed
       }
     };
+
+    // Write with backpressure + error awareness: resolve(false) on a dead socket
+    // or a write error so the caller can close instead of buffering unboundedly.
+    const write = (chunk: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        if (closed || res.writableEnded || res.destroyed) return resolve(false);
+        let settled = false;
+        const finish = (ok: boolean): void => {
+          if (settled) return;
+          settled = true;
+          res.off('drain', onDrain);
+          res.off('error', onErr);
+          resolve(ok);
+        };
+        const onDrain = (): void => finish(true);
+        const onErr = (): void => finish(false);
+        let ok = false;
+        try {
+          ok = res.write(chunk);
+        } catch {
+          return finish(false);
+        }
+        if (ok) return finish(true);
+        res.once('drain', onDrain);
+        res.once('error', onErr);
+      });
+
+    const sub = bus.subscribe(
+      async (m) => {
+        const ok = await write(`data: ${JSON.stringify(m)}\n\n`);
+        if (!ok) close();
+      },
+      { fromSeq },
+    );
+
+    res.on('error', close);
     req.raw.on('close', close);
   });
 

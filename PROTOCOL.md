@@ -67,7 +67,7 @@ Eight types, in two groups: **task lifecycle** (drive the task FSM in §5) and
 | --- | --- | --- | --- |
 | `task.created` | Post a new task to the board. | `taskId`, `title` | ∅ → `open` |
 | `task.claimed` | Claim an open task. **Single-claimer point** (§6). | `taskId` | `open` → `claimed` |
-| `task.completed` | Mark a claimed task done. | `taskId` | `claimed` → `done` |
+| `task.completed` | Mark a claimed task done. | `taskId` | `claimed`\|`blocked` → `done` |
 | `task.blocked` | Signal a claimed task is stuck. | `taskId`, `reason` | `claimed` → `blocked` |
 | `task.released` | Give up ownership; return task to the pool. | `taskId` | `claimed`\|`blocked` → `open` |
 | `task.cancelled` | Creator withdraws a task. | `taskId` | `open`\|`claimed`\|`blocked` → `cancelled` |
@@ -460,6 +460,21 @@ the single-claimer guarantee crisp: **a claim is valid only from `open`.**
 
 Communication messages (`status.update`, `request.help`) never change task
 state and are always accepted (subject to schema validation).
+
+### Rejection reasons
+
+When a lifecycle message is rejected, the bus reports a stable reason code. Over
+HTTP it appears as the `reason` field of a `409 Conflict` body; in the reference
+library it is `TransitionError.reason`.
+
+| Reason | Meaning | Emitted by |
+| --- | --- | --- |
+| `task_exists` | A task with this `taskId` already exists. | `task.created` |
+| `task_not_found` | No task with this `taskId`. | claim/complete/block/release/cancel |
+| `not_open` | Task is not `open` (already claimed/blocked/terminal). | `task.claimed` |
+| `invalid_state` | Task is in a state this transition can't apply from. | complete/block/release/cancel |
+| `not_owner` | Sender is not the current claimer. | complete/block/release |
+| `not_creator` | Sender is not the task's creator. | `task.cancelled` |
 
 ---
 

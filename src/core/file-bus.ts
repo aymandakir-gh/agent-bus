@@ -16,7 +16,7 @@ import { acquireLock, type LockOptions } from './lock';
 import { classifyTransition, reduce } from './fsm';
 import { newId } from './ids';
 import { assertValidInput, assertValidMessage } from './validate';
-import { TransitionError, type TransitionReason } from './errors';
+import { BusError, TransitionError, type TransitionReason } from './errors';
 import type {
   Message,
   MessageInput,
@@ -156,32 +156,49 @@ export class FileBus {
    *  task FSM, assigns `id`/`seq`/`ts`, and appends one line — atomically. */
   async post(input: MessageInput): Promise<Message> {
     assertValidInput(input);
-    const handle = await acquireLock(this.lockPath, this.lockOptions);
-    try {
-      const state = await this.readState();
+    const maxAttempts = 50;
+    for (let attempt = 1; ; attempt++) {
+      const handle = await acquireLock(this.lockPath, this.lockOptions);
+      try {
+        const state = await this.readState();
 
-      // Idempotency: a re-posted id is a no-op that returns the existing record.
-      if (input.id && state.ids.has(input.id)) {
-        const existing = state.messages.find((m) => m.id === input.id);
-        if (existing) return existing;
+        // Idempotency: a re-posted id is a no-op returning the existing record.
+        // Records in our snapshot were committed before we acquired the lock, so
+        // returning one is safe regardless of any ownership race below.
+        if (input.id && state.ids.has(input.id)) {
+          const existing = state.messages.find((m) => m.id === input.id);
+          if (existing) return existing;
+        }
+
+        const msg = this.materialize(input, state.lastSeq + 1);
+        assertValidMessage(msg);
+
+        const taskId = taskIdOf(msg);
+        const current = taskId !== undefined ? state.tasks.get(taskId) : undefined;
+        const result = classifyTransition(current, msg);
+
+        if (this.chaosMs > 0) await sleep(Math.floor(Math.random() * this.chaosMs));
+
+        // Confirm we held the lock continuously from readState() to here. A lost
+        // token means we were stolen (judged dead, or a cross-host steal), so our
+        // snapshot — and thus seq and the FSM decision — may be stale. Discard and
+        // retry under a fresh lock rather than commit a duplicate seq / double-claim.
+        if (!(await handle.isOwned())) {
+          if (attempt >= maxAttempts) {
+            throw new BusError('lost the write lock repeatedly while posting', 'bus');
+          }
+          continue;
+        }
+
+        if (!result.ok) {
+          throw new TransitionError(result.reason, taskId ?? '', result.from);
+        }
+
+        await this.appendLine(JSON.stringify(msg));
+        return msg;
+      } finally {
+        await handle.release();
       }
-
-      const msg = this.materialize(input, state.lastSeq + 1);
-      assertValidMessage(msg);
-
-      const taskId = taskIdOf(msg);
-      const current = taskId !== undefined ? state.tasks.get(taskId) : undefined;
-      const result = classifyTransition(current, msg);
-      if (!result.ok) {
-        throw new TransitionError(result.reason, taskId ?? '', result.from);
-      }
-
-      if (this.chaosMs > 0) await sleep(Math.floor(Math.random() * this.chaosMs));
-
-      await this.appendLine(JSON.stringify(msg));
-      return msg;
-    } finally {
-      await handle.release();
     }
   }
 
@@ -332,8 +349,10 @@ export class FileBus {
         for (const m of messages) {
           if (closed) break;
           if (m.seq > cursor) {
-            cursor = m.seq;
+            // Advance the cursor only after the handler succeeds, so a throwing
+            // handler is retried on the next tick (at-least-once delivery, G5).
             await handler(m);
+            cursor = m.seq;
           }
         }
       } catch {

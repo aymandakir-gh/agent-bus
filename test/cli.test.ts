@@ -77,4 +77,26 @@ describe('cli: end-to-end over a folder', () => {
     expect(r.status).toBe(1);
     expect(r.stderr.toLowerCase()).toContain('title');
   });
+
+  it('rejects a non-integer numeric flag instead of silently ignoring it', () => {
+    const r = cli('messages', '--from', 'xyz');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('--from');
+  });
+
+  it('reports invalid JSON in --result clearly', () => {
+    cli('create-task', '--title', 'X', '--agent', 'lead', '--task', 't1');
+    cli('claim', 't1', '--agent', 'w1');
+    const r = cli('complete', 't1', '--agent', 'w1', '--result', '{bad json}');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('--result');
+  });
+
+  it('claim with a stable --id is idempotent on retry', () => {
+    cli('create-task', '--title', 'X', '--agent', 'lead', '--task', 't1');
+    const first = cli('claim', 't1', '--agent', 'w1', '--id', 'claim-key-1');
+    const retry = cli('claim', 't1', '--agent', 'w1', '--id', 'claim-key-1');
+    expect(first.status).toBe(0);
+    expect(retry.status).toBe(0); // same id => no-op success, not a lost race
+  });
 });

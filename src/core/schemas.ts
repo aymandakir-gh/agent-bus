@@ -204,7 +204,11 @@ export const taskSchema: Json = {
     title: { type: 'string', minLength: 1, maxLength: 200 },
     description: { type: 'string', maxLength: 4000 },
     priority: priorityDef,
-    tags: { type: 'array', items: { type: 'string' } },
+    tags: {
+      type: 'array',
+      maxItems: 16,
+      items: { type: 'string', minLength: 1, maxLength: 64 },
+    },
     state: {
       type: 'string',
       enum: ['open', 'claimed', 'blocked', 'done', 'cancelled'],

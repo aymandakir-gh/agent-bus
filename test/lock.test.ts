@@ -57,10 +57,22 @@ describe('lock: stale recovery', () => {
     await h.release();
   });
 
-  it('steals a lock older than staleMs even if pid looks alive', async () => {
+  it('does NOT steal a live same-host holder, even an old one', async () => {
+    // Stealing a live (merely slow) holder would let two writers into the
+    // critical section. process.pid is alive by definition, so this must time out.
     await writeFile(
       lockPath,
-      JSON.stringify({ pid: process.pid, host: hostname(), ts: Date.now() - 5000, token: 'old' }),
+      JSON.stringify({ pid: process.pid, host: hostname(), ts: Date.now() - 60_000, token: 'live' }),
+    );
+    await expect(
+      acquireLock(lockPath, { staleMs: 1, timeoutMs: 200 }),
+    ).rejects.toBeInstanceOf(LockTimeoutError);
+  });
+
+  it('steals a stale lock from a different host by age (liveness unknowable)', async () => {
+    await writeFile(
+      lockPath,
+      JSON.stringify({ pid: process.pid, host: 'some-other-host', ts: Date.now() - 5000, token: 'remote' }),
     );
     const h = await acquireLock(lockPath, { staleMs: 100, timeoutMs: 2000 });
     await h.release();
@@ -91,6 +103,18 @@ describe('lock: contention & cleanup', () => {
     ).rejects.toThrow('boom');
     // If released, this acquires immediately.
     const h = await acquireLock(lockPath, { timeoutMs: 500, staleMs: 60_000 });
+    await h.release();
+  });
+
+  it('isOwned reflects whether our token is still present', async () => {
+    const h = await acquireLock(lockPath);
+    expect(await h.isOwned()).toBe(true);
+    // Simulate being stolen: a different token now holds the lock.
+    await writeFile(
+      lockPath,
+      JSON.stringify({ pid: process.pid, host: hostname(), ts: Date.now(), token: 'thief' }),
+    );
+    expect(await h.isOwned()).toBe(false);
     await h.release();
   });
 

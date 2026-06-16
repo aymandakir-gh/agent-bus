@@ -41,8 +41,12 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "schemas",
-    "PROTOCOL.md"
+    "PROTOCOL.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "examples"
   ],
   "engines": {
     "node": ">=20"

@@ -21,6 +21,10 @@ export interface LockOptions {
 
 export interface LockHandle {
   release(): Promise<void>;
+  /** True iff this handle still owns the lock (token still present on disk).
+   *  Once a lock is stolen the token is gone forever, so `true` here means the
+   *  lock has been held continuously since acquisition. */
+  isOwned(): Promise<boolean>;
 }
 
 interface LockRecord {
@@ -66,7 +70,14 @@ async function readRecord(lockPath: string): Promise<LockRecord | undefined> {
   return undefined;
 }
 
-/** Returns true if a stale/dead lock was removed (so the caller should retry). */
+/** Returns true if a stale/dead lock was removed (so the caller should retry).
+ *
+ *  A **live, same-host holder is never stolen** — only liveness (`kill(pid, 0)`)
+ *  decides, not wall-clock age. This is the crucial safety property: stealing a
+ *  lock from a holder that is merely slow (a GC pause, swap, CPU starvation)
+ *  would let two writers into the critical section and corrupt `seq`/claims.
+ *  Age is used only where liveness is unknowable: a different host (best-effort,
+ *  see PROTOCOL.md §7 on network filesystems) or an unreadable lock file. */
 async function tryStealStale(lockPath: string, staleMs: number): Promise<boolean> {
   const rec = await readRecord(lockPath);
   let stale = false;
@@ -79,10 +90,13 @@ async function tryStealStale(lockPath: string, staleMs: number): Promise<boolean
       // Vanished between EEXIST and now — caller's retry will recreate it.
       return true;
     }
+  } else if (rec.host === HOST) {
+    // Same host: trust the process table. Steal only a provably dead holder,
+    // regardless of age. A live holder is left alone.
+    stale = !isAlive(rec.pid);
   } else {
-    const ageExceeded = Date.now() - rec.ts > staleMs;
-    const deadOnThisHost = rec.host === HOST && !isAlive(rec.pid);
-    stale = deadOnThisHost || ageExceeded;
+    // Different host: liveness is unknowable here, so age is the only signal.
+    stale = Date.now() - rec.ts > staleMs;
   }
   if (!stale) return false;
   try {
@@ -109,7 +123,10 @@ export async function acquireLock(
       const rec: LockRecord = { pid: process.pid, host: HOST, ts: Date.now(), token };
       await fh.writeFile(JSON.stringify(rec));
       await fh.close();
-      return { release: () => releaseLock(lockPath, token) };
+      return {
+        release: () => releaseLock(lockPath, token),
+        isOwned: () => isLockOwned(lockPath, token),
+      };
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
       const stolen = await tryStealStale(lockPath, staleMs);
@@ -125,6 +142,12 @@ export async function acquireLock(
       // else: retry create immediately after stealing a stale lock.
     }
   }
+}
+
+/** Whether the lock file still carries our token (i.e. we were not stolen). */
+async function isLockOwned(lockPath: string, token: string): Promise<boolean> {
+  const rec = await readRecord(lockPath);
+  return rec?.token === token;
 }
 
 /** Release the lock only if we still own it (token match). Idempotent. */
