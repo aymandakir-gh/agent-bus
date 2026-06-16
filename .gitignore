@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# test / coverage
+coverage/
+.vitest/
+
+# scratch bus data dirs created by examples/tests
+*.bus/
+tmp/
+.tmp/
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# env
+.env
+.env.local
