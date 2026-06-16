@@ -1,6 +1,6 @@
 {
   "name": "agent-bus",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A message bus + task board for teams of agents — over nothing but a shared folder. An open protocol for multi-agent coordination, with a TypeScript reference implementation.",
   "keywords": [
     "agents",
@@ -66,6 +66,7 @@
     "gen:schemas": "tsx src/scripts/gen-schemas.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {

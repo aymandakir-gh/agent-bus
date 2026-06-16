@@ -9,7 +9,9 @@ import {
   isValidMessage,
   isValidInput,
   validateMessage,
+  assertValidMessage,
 } from '../src/core/validate';
+import { ValidationError } from '../src/core/errors';
 
 const root = process.cwd();
 
@@ -128,6 +130,11 @@ describe('schema: stored messages', () => {
     const bad = validateMessage(invalidStored[0]![1]);
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.errors.length).toBeGreaterThan(0);
+  });
+
+  it('assertValidMessage throws ValidationError on an invalid stored message', () => {
+    expect(() => assertValidMessage({ type: 'status.update' })).toThrow(ValidationError);
+    expect(() => assertValidMessage(validStored[0]![1])).not.toThrow();
   });
 });
 

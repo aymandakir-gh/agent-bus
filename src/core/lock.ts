@@ -27,6 +27,13 @@ export interface LockHandle {
   isOwned(): Promise<boolean>;
 }
 
+/** Signature of {@link acquireLock}. The `FileBus` accepts an injectable
+ *  acquirer (advanced/testing seam) so the default — which upholds the
+ *  single-writer, steal-only-on-process-death invariant — can be swapped, e.g.
+ *  to prove with a deliberately-broken lock that the guarantee is load-bearing.
+ *  Production always uses the default. */
+export type AcquireLockFn = (lockPath: string, options?: LockOptions) => Promise<LockHandle>;
+
 interface LockRecord {
   pid: number;
   host: string;

@@ -5,6 +5,30 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The wire protocol is versioned
 separately as `agent-bus/N` (see [PROTOCOL.md](./PROTOCOL.md)).
 
+## [0.3.0] — 2026-06-16
+
+Concurrency at scale, and a falsifiable lock. Wire format unchanged
+(`agent-bus/0`, spec `0.1.0`).
+
+### Added
+- **Incremental tail reads.** `FileBus` keeps a byte cursor and parses only the
+  bytes appended since its last read (folding them into cached state), instead of
+  re-reading the whole log every op. Turns an O(n)-per-op read into O(new bytes)
+  and makes large logs practical — an 8-process / 1000-task run drops from a
+  crawl to ~2s. Matches the normative behaviour already described in PROTOCOL.md
+  §7/§9. Concurrent refreshes on one instance are serialized so a delta is never
+  applied twice.
+- **Scaled concurrency simulation** (`test/concurrency.scale.sim.test.ts`): ≥8 OS
+  processes draining ≥1000 tasks over one folder, repeated across 3 seeds,
+  asserting zero double-claims, gapless/unique `seq`, and eventual completion.
+- **Falsifiable lock.** A test-only injected lock acquirer (`lockAcquirer`
+  option) lets the *same* simulation run against a deliberately broken (no-op)
+  lock; tests prove it then fails (double-claims, duplicate `seq`) — in-process
+  (deterministic) and multi-process. Production always uses the real lock and its
+  steal-only-on-process-death invariant.
+- **Coverage gate** (`pnpm test:coverage`, enforced in CI): `src/core` line ≥ 90%
+  and branch ≥ 80%.
+
 ## [0.2.0] — 2026-06-16
 
 Transport conformance. The protocol wire format is unchanged (`agent-bus/0`,
@@ -54,5 +78,6 @@ First release. Protocol `agent-bus/0`.
   multi-process concurrency simulation proving single-claimer & ordering.
 - **Example**: the two-terminal shared-folder demo (`examples/shared-folder`).
 
+[0.3.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.3.0
 [0.2.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.1.0

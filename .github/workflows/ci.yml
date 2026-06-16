@@ -44,8 +44,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test (incl. concurrency simulation)
-        run: pnpm test
+      - name: Test (incl. scaled concurrency simulation) + coverage gate
+        run: pnpm test:coverage
 
       - name: Build
         run: pnpm build

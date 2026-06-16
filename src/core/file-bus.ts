@@ -12,8 +12,8 @@ import { watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 
 import { PROTOCOL_ID, SPEC_VERSION } from '../version';
-import { acquireLock, type LockOptions } from './lock';
-import { classifyTransition, reduce } from './fsm';
+import { acquireLock, type AcquireLockFn, type LockOptions } from './lock';
+import { applyTransition, classifyTransition } from './fsm';
 import { newId } from './ids';
 import { assertValidInput, assertValidMessage } from './validate';
 import { BusError, TransitionError } from './errors';
@@ -64,6 +64,13 @@ export interface FileBusOptions {
    * `AGENT_BUS_CHAOS` env var.
    */
   criticalSectionDelayMs?: number;
+  /**
+   * Advanced/testing: override how the bus-wide write lock is acquired. Defaults
+   * to {@link acquireLock}, which upholds the single-writer, steal-only-on-
+   * process-death invariant. Provided so a deliberately-broken lock can prove,
+   * in tests, that the guarantee is load-bearing. **Never override in production.**
+   */
+  lockAcquirer?: AcquireLockFn;
 }
 
 interface BusState {
@@ -91,6 +98,20 @@ export class FileBus implements BusTransport {
   private readonly lockOptions: LockOptions | undefined;
   private readonly pollIntervalMs: number;
   private readonly chaosMs: number;
+  private readonly acquire: AcquireLockFn;
+
+  // Incremental read cache: the log is append-only and totally ordered, so we
+  // keep a byte cursor (`offset`) and only parse bytes appended since the last
+  // read — turning every read from O(log) into O(new bytes). The folded state
+  // (messages/tasks/ids/lastSeq) is advanced in place. Refreshes are serialized
+  // through `refreshChain` so concurrent reads on one instance never double-apply
+  // a delta. (PROTOCOL.md §7 / PRD risk: "reading the whole log per op is O(n)".)
+  private messages: Message[] = [];
+  private tasksCache = new Map<string, TaskView>();
+  private idsCache = new Set<string>();
+  private lastSeqCache = 0;
+  private offset = 0;
+  private refreshChain: Promise<unknown> = Promise.resolve();
 
   constructor(options: FileBusOptions) {
     this.dir = options.dir;
@@ -101,6 +122,7 @@ export class FileBus implements BusTransport {
     this.pollIntervalMs = options.pollIntervalMs ?? 100;
     const envChaos = Number.parseInt(process.env.AGENT_BUS_CHAOS ?? '', 10);
     this.chaosMs = options.criticalSectionDelayMs ?? (Number.isFinite(envChaos) ? envChaos : 0);
+    this.acquire = options.lockAcquirer ?? acquireLock;
   }
 
   /** Initialize a bus directory (idempotent — never overwrites existing data). */
@@ -143,7 +165,7 @@ export class FileBus implements BusTransport {
     assertValidInput(input);
     const maxAttempts = 50;
     for (let attempt = 1; ; attempt++) {
-      const handle = await acquireLock(this.lockPath, this.lockOptions);
+      const handle = await this.acquire(this.lockPath, this.lockOptions);
       try {
         const state = await this.readState();
 
@@ -318,8 +340,13 @@ export class FileBus implements BusTransport {
       running = true;
       try {
         const { messages } = await this.readState();
-        for (const m of messages) {
+        // Freeze the length: `messages` is the live cache array and may grow
+        // during an `await handler(...)`; newly-appended messages are delivered
+        // on the next tick instead.
+        const len = messages.length;
+        for (let i = 0; i < len; i++) {
           if (closed) break;
+          const m = messages[i]!;
           if (m.seq > cursor) {
             // Advance the cursor only after the handler succeeds, so a throwing
             // handler is retried on the next tick (at-least-once delivery, G5).
@@ -373,17 +400,57 @@ export class FileBus implements BusTransport {
     } as Message;
   }
 
-  /** Full read of the log → parsed, ordered messages + derived state. Skips
-   *  blank/corrupt/partial lines defensively. O(n) per call (see roadmap). */
+  /** Bring the in-memory state up to date with the log and return a snapshot
+   *  (live references — callers treat it as read-only and consume it
+   *  synchronously, or freeze the length they iterate). Refreshes are serialized
+   *  so two concurrent reads never apply the same byte delta twice. */
   private async readState(): Promise<BusState> {
-    let text = '';
+    const run = this.refreshChain.then(
+      () => this.refreshState(),
+      () => this.refreshState(),
+    );
+    this.refreshChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** Incrementally parse bytes appended since `offset` and fold them in. Only
+   *  complete (newline-terminated) lines are consumed; a partial trailing line
+   *  (a crashed/in-flight writer) is left for a later read. */
+  private async refreshState(): Promise<BusState> {
+    let size: number;
     try {
-      text = await readFile(this.logPath, 'utf8');
+      size = (await stat(this.logPath)).size;
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return this.snapshot();
+      throw e;
     }
-    const messages: Message[] = [];
-    const ids = new Set<string>();
+    if (size < this.offset) this.resetCache(); // truncated/replaced — rebuild
+    if (size === this.offset) return this.snapshot(); // nothing new
+
+    const fh = await open(this.logPath, 'r');
+    try {
+      const length = size - this.offset;
+      const buf = Buffer.alloc(length);
+      await fh.read(buf, 0, length, this.offset);
+      const text = buf.toString('utf8');
+      const lastNl = text.lastIndexOf('\n');
+      if (lastNl === -1) return this.snapshot(); // no complete line yet
+      const consumable = text.slice(0, lastNl + 1);
+      this.applyLines(consumable);
+      this.offset += Buffer.byteLength(consumable, 'utf8');
+    } finally {
+      await fh.close();
+    }
+    return this.snapshot();
+  }
+
+  /** Fold newly-read lines into the cache, in file order (== `seq` order, since
+   *  every append assigns `lastSeq + 1` under the lock). Skips blank/corrupt
+   *  lines and any duplicate id defensively. */
+  private applyLines(text: string): void {
     for (const line of text.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed) continue;
@@ -394,13 +461,33 @@ export class FileBus implements BusTransport {
         continue; // partial or corrupt line; ignore
       }
       if (!isStoredShape(obj)) continue;
-      messages.push(obj);
-      ids.add(obj.id);
+      if (this.idsCache.has(obj.id)) continue;
+      this.messages.push(obj);
+      this.idsCache.add(obj.id);
+      if (obj.seq > this.lastSeqCache) this.lastSeqCache = obj.seq;
+      if (obj.type === 'status.update' || obj.type === 'request.help') continue;
+      const taskId = (obj as { taskId: string }).taskId;
+      const current = this.tasksCache.get(taskId);
+      const res = classifyTransition(current, obj);
+      if (res.ok && res.changed) this.tasksCache.set(taskId, applyTransition(current, obj));
     }
-    messages.sort((a, b) => a.seq - b.seq);
-    const tasks = reduce(messages);
-    const lastSeq = messages.length ? (messages[messages.length - 1] as Message).seq : 0;
-    return { messages, tasks, ids, lastSeq };
+  }
+
+  private snapshot(): BusState {
+    return {
+      messages: this.messages,
+      tasks: this.tasksCache,
+      ids: this.idsCache,
+      lastSeq: this.lastSeqCache,
+    };
+  }
+
+  private resetCache(): void {
+    this.messages = [];
+    this.tasksCache = new Map();
+    this.idsCache = new Set();
+    this.lastSeqCache = 0;
+    this.offset = 0;
   }
 
   /** Append one line, first repairing a crashed partial line if present. */

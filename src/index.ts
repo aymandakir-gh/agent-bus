@@ -32,6 +32,7 @@ export {
   withLock,
   type LockHandle,
   type LockOptions,
+  type AcquireLockFn,
 } from './core/lock';
 export {
   FileBus,

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, appendFile, readdir } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, appendFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -118,6 +118,52 @@ describe('FileBus: durability', () => {
 
     const raw = await readFile(bus.logPath, 'utf8');
     expect(raw.endsWith('\n')).toBe(true);
+  });
+});
+
+describe('FileBus: incremental reads', () => {
+  it('a separate instance sees appends incrementally (byte-cursor delta reads)', async () => {
+    const reader = new FileBus({ dir });
+    await bus.post({ type: 'status.update', agent: 'a', text: '1' });
+    expect((await reader.getMessages()).map((m) => m.seq)).toEqual([1]);
+
+    await bus.post({ type: 'status.update', agent: 'a', text: '2' });
+    await bus.post({ type: 'status.update', agent: 'a', text: '3' });
+    // The reader only parses the newly-appended bytes, not the whole log.
+    expect((await reader.getMessages()).map((m) => m.seq)).toEqual([1, 2, 3]);
+
+    await bus.createTask({ title: 'X', agent: 'lead', taskId: 't1' });
+    await bus.claim('t1', 'w1');
+    expect((await reader.getTask('t1'))?.state).toBe('claimed'); // folded state advances too
+  });
+
+  it('returns a stable view when nothing new has been appended', async () => {
+    await bus.post({ type: 'status.update', agent: 'a', text: '1' });
+    const first = await bus.getMessages();
+    const second = await bus.getMessages(); // no new bytes ⇒ same content
+    expect(second.map((m) => m.seq)).toEqual(first.map((m) => m.seq));
+  });
+
+  it('defensively rebuilds if the log is truncated/replaced underneath it', async () => {
+    await bus.post({ type: 'status.update', agent: 'a', text: '1' });
+    await bus.post({ type: 'status.update', agent: 'a', text: '2' });
+    expect(await bus.getMessages()).toHaveLength(2); // advances the byte cursor
+
+    // Replace the log with a strictly shorter one (size < cached offset).
+    const line =
+      JSON.stringify({
+        id: 'x',
+        seq: 1,
+        ts: new Date().toISOString(),
+        type: 'status.update',
+        agent: 'z',
+        text: 'only',
+      }) + '\n';
+    await writeFile(bus.logPath, line);
+
+    const msgs = await bus.getMessages();
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.agent).toBe('z');
   });
 });
 

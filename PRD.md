@@ -202,7 +202,7 @@ CI green. Decisions are recorded in `STATUS.md`.
 | File locking is subtly wrong under races | Atomic `O_EXCL` create; stale recovery; in-process **and** multi-process simulations with chaos delays widening the race window. |
 | Network filesystems (NFS/SMB) weaken `O_EXCL` atomicity | Documented as best-effort; HTTP transport recommended for shared-host setups. |
 | Schema ↔ doc drift | Generated schemas + drift test; single zod source of truth. |
-| Reading the whole log per op is O(n) | Incremental tail reads keyed by byte offset; documented; indexing is roadmap. |
+| Reading the whole log per op is O(n) | **Done (v0.3.0):** incremental tail reads keyed by a byte offset — each op parses only newly-appended bytes. Snapshotting/indexing for very large logs remains roadmap. |
 
 ## 10. Roadmap (post-v0)
 

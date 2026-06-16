@@ -46,6 +46,25 @@ locally (the deliverable is the `.tape` script; CI does not render it).
   releases; protocol spec version stays `0.1.0` until the protocol doc changes
   (M8) and is declared stable `1.0.0` at M10 — the two are deliberately distinct.
 
+### M6 — concurrency at scale + falsifiable lock → v0.3.0 (done ✅)
+
+- **Incremental tail reads.** `FileBus` now keeps a byte cursor and folds only
+  newly-appended bytes into cached state (`refreshState`/`applyLines`), with
+  refreshes serialized so concurrent reads on one instance never double-apply a
+  delta. O(n)-per-op → O(new bytes). This was the enabler for scale: an
+  8-process / 1000-task run went from a crawl to **~1.7s**. The behaviour matches
+  what PROTOCOL.md §7/§9 already described as normative.
+- **Scaled sim** (`test/concurrency.scale.sim.test.ts`): 8 OS processes / 1000
+  tasks / 3 seeds (101/202/303), each asserting zero double-claims, gapless
+  unique `seq`, and all tasks `done` by their claimer. ~4s/seed locally.
+- **Falsifiable lock.** Added a `lockAcquirer` DI seam (advanced/test only;
+  prod default unchanged) + a test-only no-op `brokenLockAcquirer`. The same sim
+  on the broken lock reliably violates G1/G2 (10–15 violations/run) — proven
+  in-process (deterministic double-claim) and multi-process. `findInvariantViolations`
+  is the shared checker both directions use.
+- **Coverage gate** wired into CI (`pnpm test:coverage`): `src/core` 97.7% line /
+  86.5% branch — over the 90/80 v1.0.0 gate. **189 tests green.**
+
 ## 2026-06-16
 
 - **Bootstrap.** Repo initialized. Environment: Node 24, pnpm 9.15, gh authed as
