@@ -1,0 +1,78 @@
+{
+  "name": "agent-bus",
+  "version": "0.1.0",
+  "description": "A message bus + task board for teams of agents — over nothing but a shared folder. An open protocol for multi-agent coordination, with a TypeScript reference implementation.",
+  "keywords": [
+    "agents",
+    "multi-agent",
+    "coordination",
+    "message-bus",
+    "task-queue",
+    "protocol",
+    "ai-agents",
+    "orchestration",
+    "jsonl"
+  ],
+  "license": "MIT",
+  "author": "agent-bus contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aymandakir-gh/agent-bus.git"
+  },
+  "homepage": "https://github.com/aymandakir-gh/agent-bus#readme",
+  "bugs": {
+    "url": "https://github.com/aymandakir-gh/agent-bus/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./schemas/*": "./schemas/*",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "agent-bus": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "PROTOCOL.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "gen:schemas": "tsx src/scripts/gen-schemas.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.5",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^9.17.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0",
+    "vitest": "^2.1.8"
+  }
+}
