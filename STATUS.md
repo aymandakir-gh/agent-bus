@@ -19,23 +19,42 @@ Living build log for `agent-bus`. Newest first. Kept current as milestones land.
   appends read-the-tail + validate + append under one bus-wide lock, giving
   gapless `seq` (total order) and single-winner claims. Stale-lock recovery via
   pid liveness + staleness deadline.
-- **Decision — two cross-checked validators.** zod is the runtime source of
-  truth in the reference impl; canonical JSON Schemas in `schemas/` are validated
-  with `ajv`; a conformance test asserts both accept/reject the same fixtures, and
-  a drift test asserts `schemas/` matches the blocks embedded in `PROTOCOL.md`.
-- **Decision — zero-dep CLI** via `node:util.parseArgs`; runtime deps limited to
-  `zod` + `fastify`.
+- **Decision (refined) — JSON Schema is the single source of truth.** Rather
+  than zod + a generated/mirrored JSON Schema (two artifacts that can drift), the
+  contract is authored once as JSON Schema objects in `src/core/schemas.ts`. The
+  reference bus validates with `ajv` against those exact objects — it *dogfoods
+  the published contract*. `gen:schemas` emits `schemas/*.json` and injects the
+  blocks into `PROTOCOL.md`; the schema test asserts no drift. **zod dropped**;
+  runtime deps are `ajv` + `ajv-formats` + `fastify`.
+- **Decision — zero-dep CLI** via `node:util.parseArgs` (M3).
 
 ### Milestone status
 
-- **M1** Spec + core model + file transport + schema tests + CI green — _in progress_
-- **M2** Concurrency-safe claim + multi-agent simulation — _not started_
+- **M1** Spec + core model + file transport + schema tests + CI green — **done** ✅
+- **M2** Concurrency-safe claim + multi-agent simulation — _next_
 - **M3** HTTP transport + CLI — _not started_
 - **M4** Launch (README, demo, CONTRIBUTING, release) — _not started_
 
+### M1 results (2026-06-16)
+
+- 8 message types + input variant + task view as JSON Schema (draft 2020-12),
+  published to `schemas/` and embedded in `PROTOCOL.md`.
+- Task FSM (`classifyTransition` oracle + pure `reduce`).
+- Atomic file lock (`O_EXCL` create + stale recovery).
+- `FileBus`: post/claim/complete/block/release/cancel, derived task views,
+  filtered reads, polling subscriptions, idempotency, partial-line repair.
+- 54 tests green (schema conformance + drift, FSM, file-bus). Typecheck, lint,
+  build all green locally; scaffold CI run passed on Node 20 & 22.
+
+### Open decision — npm publish
+
+`npx agent-bus` is a launch goal. GitHub repo/releases are clearly in scope and
+will be executed. npm publish is the one irreversible public action; it will be
+done as the final, fully-verified M4 step (name permitting), with `npm pack`
+inspected first. Recorded here for review.
+
 ### Next
 
-1. First commit: `PRD.md` + `PROTOCOL.md` (+ LICENSE, .gitignore, README stub).
-2. Scaffold TS toolchain + CI; get a trivial green build.
-3. Create GitHub repo, push, confirm CI green before features.
-4. Implement M1: schemas → FSM → FileBus, each with tests.
+1. M2: lock tests, in-process burst-claim race, multi-process simulation.
+2. M3: HTTP transport + full CLI.
+3. M4: README + two-terminal demo + CONTRIBUTING + release.

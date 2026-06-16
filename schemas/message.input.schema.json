@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/aymandakir-gh/agent-bus/blob/main/schemas/message.input.schema.json",
+  "title": "AgentBusMessageInput",
+  "description": "A message as posted by a client (protocol agent-bus/0); the bus assigns id, seq, ts.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "#/$defs/envelope"
+    }
+  ],
+  "oneOf": [
+    {
+      "$ref": "#/$defs/task_created"
+    },
+    {
+      "$ref": "#/$defs/task_claimed"
+    },
+    {
+      "$ref": "#/$defs/task_completed"
+    },
+    {
+      "$ref": "#/$defs/task_blocked"
+    },
+    {
+      "$ref": "#/$defs/task_released"
+    },
+    {
+      "$ref": "#/$defs/task_cancelled"
+    },
+    {
+      "$ref": "#/$defs/status_update"
+    },
+    {
+      "$ref": "#/$defs/request_help"
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "required": [
+        "type",
+        "agent"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "task.created",
+            "task.claimed",
+            "task.completed",
+            "task.blocked",
+            "task.released",
+            "task.cancelled",
+            "status.update",
+            "request.help"
+          ]
+        },
+        "meta": {
+          "type": "object"
+        }
+      }
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "urgent"
+      ]
+    },
+    "task_created": {
+      "type": "object",
+      "required": [
+        "type",
+        "taskId",
+        "title"
+      ],
+      "properties": {
+        "type": {
+          "const": "task.created"
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    "task_claimed": {
+      "type": "object",
+      "required": [
+        "type",
+        "taskId"
+      ],
+      "properties": {
+        "type": {
+          "const": "task.claimed"
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "task_completed": {
+      "type": "object",
+      "required": [
+        "type",
+        "taskId"
+      ],
+      "properties": {
+        "type": {
+          "const": "task.completed"
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "result": {},
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "task_blocked": {
+      "type": "object",
+      "required": [
+        "type",
+        "taskId",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "task.blocked"
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "task_released": {
+      "type": "object",
+      "required": [
+        "type",
+        "taskId"
+      ],
+      "properties": {
+        "type": {
+          "const": "task.released"
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "task_cancelled": {
+      "type": "object",
+      "required": [
+        "type",
+        "taskId"
+      ],
+      "properties": {
+        "type": {
+          "const": "task.cancelled"
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "status_update": {
+      "type": "object",
+      "required": [
+        "type",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "const": "status.update"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "data": {
+          "type": "object"
+        }
+      }
+    },
+    "request_help": {
+      "type": "object",
+      "required": [
+        "type",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "const": "request.help"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "taskId": {
+          "$ref": "#/$defs/taskId"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "data": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

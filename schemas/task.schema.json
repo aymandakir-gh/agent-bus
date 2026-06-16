@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/aymandakir-gh/agent-bus/blob/main/schemas/task.schema.json",
+  "title": "AgentBusTask",
+  "description": "A task view derived by folding the message log. Not part of the wire contract.",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "priority",
+    "tags",
+    "state",
+    "creator",
+    "createdSeq",
+    "updatedSeq",
+    "createdAt",
+    "updatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/taskId"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "claimed",
+        "blocked",
+        "done",
+        "cancelled"
+      ]
+    },
+    "creator": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "claimer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "result": {},
+    "blockedReason": {
+      "type": "string"
+    },
+    "createdSeq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedSeq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  }
+}
