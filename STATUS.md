@@ -33,7 +33,8 @@ Living build log for `agent-bus`. Newest first. Kept current as milestones land.
 - **M1** Spec + core model + file transport + schema tests + CI green — **done** ✅
 - **M2** Concurrency-safe claim + multi-agent simulation — **done** ✅
 - **M3** HTTP transport + CLI — **done** ✅
-- **M4** Launch (README, demo, CONTRIBUTING, release) — _next_
+- **M4** Launch (README, demo, CONTRIBUTING, release) — **in progress** (docs +
+  demo done; tagging + release + npm publish next)
 
 ### M3 results (2026-06-16)
 
