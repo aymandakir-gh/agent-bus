@@ -42,7 +42,24 @@ function intParam(value: string | string[] | undefined, name: string): number | 
 
 export function createServer(options: CreateServerOptions): FastifyInstance {
   const { bus } = options;
-  const app = Fastify({ logger: options.logger ?? false });
+  // SSE responses are long-lived event streams that never end on their own, so a
+  // graceful `close()` would otherwise hang waiting for them. `forceCloseConnections`
+  // drops lingering keep-alive sockets, and we additionally destroy every open SSE
+  // stream on shutdown (see the `onClose` hook below).
+  const app = Fastify({ logger: options.logger ?? false, forceCloseConnections: true });
+
+  /** Open SSE responses, destroyed on shutdown so `close()` never hangs. */
+  const sseStreams = new Set<NodeJS.WritableStream & { destroy(): void }>();
+  app.addHook('onClose', async () => {
+    for (const res of sseStreams) {
+      try {
+        res.destroy();
+      } catch {
+        // already gone
+      }
+    }
+    sseStreams.clear();
+  });
 
   app.get('/health', async () => ({ ok: true, protocol: PROTOCOL_ID, version: SPEC_VERSION }));
 
@@ -88,6 +105,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
       priority?: 'low' | 'normal' | 'high';
       tags?: string[];
       id?: string;
+      meta?: Record<string, unknown>;
     };
     const msg = await bus.createTask(b);
     reply.code(201);
@@ -96,8 +114,13 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
 
   app.post('/tasks/:id/claim', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const b = (req.body ?? {}) as { agent: string; note?: string; id?: string };
-    const res = await bus.claim(id, b.agent, { note: b.note, id: b.id });
+    const b = (req.body ?? {}) as {
+      agent: string;
+      note?: string;
+      id?: string;
+      meta?: Record<string, unknown>;
+    };
+    const res = await bus.claim(id, b.agent, { note: b.note, id: b.id, meta: b.meta });
     reply.code(res.ok ? 201 : 409);
     return res;
   });
@@ -147,11 +170,13 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
       connection: 'keep-alive',
     });
     res.write('event: ready\ndata: {"ok":true}\n\n');
+    sseStreams.add(res);
 
     let closed = false;
     const close = (): void => {
       if (closed) return;
       closed = true;
+      sseStreams.delete(res);
       sub.close();
       try {
         res.end();

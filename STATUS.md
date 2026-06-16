@@ -2,6 +2,50 @@
 
 Living build log for `agent-bus`. Newest first. Kept current as milestones land.
 
+## 2026-06-16 — Road to v1.0.0
+
+Picking up the shipped v0.1.0 to drive it to a stable **v1.0.0**. Plan (one
+release tag per milestone; full plan in `PRD.md` → "The road to v1.0.0"):
+
+- **v0.2.0 (M5)** — `BusTransport` interface + a transport-neutral conformance
+  suite (≥40 cases); file **and** HTTP transports pass the *same* suite.
+- **v0.3.0 (M6)** — incremental tail reads; concurrency sim scaled to ≥8
+  processes / ≥1000 tasks / ≥3 seeds in CI; a falsifiable broken-lock variant.
+- **v0.4.0 (M7)** — a Python reference client validated against the published
+  schemas, proven against the HTTP transport in CI.
+- **v0.5.0 (M8)** — versioned bundled schema artifact + `PROTOCOL.md` version
+  field & compatibility section.
+- **v0.6.0 (M9)** — CLI complete + two-terminal quickstart + vhs demo tape.
+- **v1.0.0 (M10)** — coverage gates (core line ≥90% / branch ≥80%), ≥130 tests,
+  multi-agent adversarial review, every finding fixed + regression-tested.
+
+Baseline at kickoff: 86 tests green; `src/core` coverage 94.45% line / 82.87%
+branch (already over the v1.0.0 gate — added `@vitest/coverage-v8`). CI green on
+Node 20 & 22. gh authed; npm pack clean (52.8 kB, 24 files). `vhs` not installed
+locally (the deliverable is the `.tape` script; CI does not render it).
+
+### M5 — transport conformance → v0.2.0 (done ✅)
+
+- **`BusTransport`** (`src/core/transport.ts`) is now the contract; the shared
+  option/result types (`ClaimResult`, `MessageFilter`, …) moved here so the
+  contract owns its vocabulary. `FileBus implements BusTransport`.
+- **`HttpBusClient`** (`src/http/client.ts`) — a fetch-only client that
+  reconstructs the core's typed errors from HTTP error bodies, so the suite
+  behaves identically on both transports. Exported from the package root; the
+  server moved behind the `agent-bus/server` subpath (no Fastify in core entry).
+- **Conformance suite** (`test/conformance/suite.ts`, 46 cases) runs against the
+  file transport (direct) and the HTTP transport (`HttpBusClient` over a live
+  Fastify server) from the *same* source — 92 cases, both green. Exceeds the
+  ≥40 requirement.
+- **Real bug caught by the suite:** HTTP `close()` hung on open SSE streams
+  (graceful shutdown waits for never-ending event streams). Fixed by tracking
+  SSE responses + destroying them on `onClose` and `forceCloseConnections`;
+  added a focused regression test. Cut the HTTP suite from ~35s (hanging) to
+  ~1.2s.
+- **178 tests green** (86 → 178). Decision: package version (0.2.0…1.0.0) tracks
+  releases; protocol spec version stays `0.1.0` until the protocol doc changes
+  (M8) and is declared stable `1.0.0` at M10 — the two are deliberately distinct.
+
 ## 2026-06-16
 
 - **Bootstrap.** Repo initialized. Environment: Node 24, pnpm 9.15, gh authed as

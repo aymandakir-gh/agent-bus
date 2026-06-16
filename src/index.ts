@@ -36,10 +36,19 @@ export {
 export {
   FileBus,
   type FileBusOptions,
-  type BusMeta,
-  type ClaimResult,
-  type MessageFilter,
-  type TaskFilter,
-  type SubscribeOptions,
-  type Subscription,
 } from './core/file-bus';
+export type {
+  BusTransport,
+  BusMeta,
+  ClaimResult,
+  ClaimOptions,
+  CreateTaskInput,
+  MessageFilter,
+  TaskFilter,
+  SubscribeOptions,
+  Subscription,
+} from './core/transport';
+// The HTTP *client* is fetch-only (no server dependency), so it is safe to
+// export from the main entry. The *server* lives behind the `agent-bus/server`
+// subpath so importing the library never eagerly loads Fastify.
+export { HttpBusClient, type HttpBusClientOptions } from './http/client';

@@ -119,6 +119,24 @@ describe('http: single-claimer over the network path', () => {
   });
 });
 
+describe('http: graceful shutdown', () => {
+  it('close() resolves promptly even with an open SSE subscription', async () => {
+    // SSE streams never end on their own; a naive close() would hang on them.
+    const controller = new AbortController();
+    const res = await fetch(url + '/subscribe?fromSeq=0', { signal: controller.signal });
+    expect(res.status).toBe(200);
+    // Read the ready frame so the stream is genuinely established server-side.
+    await res.body!.getReader().read();
+
+    const start = Date.now();
+    await app.close();
+    expect(Date.now() - start).toBeLessThan(5000);
+    controller.abort();
+    // Re-open for the afterEach close() (idempotent) — nothing else to assert.
+    ({ app, url, bus } = await startServer({ dir, port: 0 }));
+  });
+});
+
 describe('http: subscriptions (SSE)', () => {
   it('streams messages as Server-Sent Events', async () => {
     await post('/messages', { type: 'status.update', agent: 'a', text: 'one' });

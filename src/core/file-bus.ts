@@ -16,16 +16,36 @@ import { acquireLock, type LockOptions } from './lock';
 import { classifyTransition, reduce } from './fsm';
 import { newId } from './ids';
 import { assertValidInput, assertValidMessage } from './validate';
-import { BusError, TransitionError, type TransitionReason } from './errors';
+import { BusError, TransitionError } from './errors';
 import type {
   Message,
   MessageInput,
-  MessageType,
   TaskClaimedMessage,
   TaskCreatedMessage,
-  TaskState,
   TaskView,
 } from './types';
+import type {
+  BusMeta,
+  BusTransport,
+  ClaimOptions,
+  ClaimResult,
+  CreateTaskInput,
+  MessageFilter,
+  SubscribeOptions,
+  Subscription,
+  TaskFilter,
+} from './transport';
+
+// Re-exported so existing importers (and `index.ts`) keep their paths; the
+// canonical home of these contract types is now `transport.ts`.
+export type {
+  BusMeta,
+  ClaimResult,
+  MessageFilter,
+  TaskFilter,
+  SubscribeOptions,
+  Subscription,
+} from './transport';
 
 const LOG_FILE = 'log.jsonl';
 const LOCK_FILE = 'lock';
@@ -46,41 +66,6 @@ export interface FileBusOptions {
   criticalSectionDelayMs?: number;
 }
 
-export interface BusMeta {
-  protocol: string;
-  version: string;
-  created: string;
-}
-
-export type ClaimResult =
-  | { ok: true; message: TaskClaimedMessage }
-  | { ok: false; reason: TransitionReason; from: TaskState | undefined };
-
-export interface MessageFilter {
-  /** Only messages with `seq` strictly greater than this. */
-  fromSeq?: number;
-  type?: MessageType | MessageType[];
-  taskId?: string;
-  agent?: string;
-  /** Return at most this many (after other filters), keeping the latest. */
-  limit?: number;
-}
-
-export interface TaskFilter {
-  state?: TaskState | TaskState[];
-}
-
-export interface SubscribeOptions {
-  /** Start after this `seq` (default 0 = from the beginning). */
-  fromSeq?: number;
-  intervalMs?: number;
-  signal?: AbortSignal;
-}
-
-export interface Subscription {
-  close(): void;
-}
-
 interface BusState {
   messages: Message[];
   tasks: Map<string, TaskView>;
@@ -98,7 +83,7 @@ function taskIdOf(msg: Message): string | undefined {
     : undefined;
 }
 
-export class FileBus {
+export class FileBus implements BusTransport {
   readonly dir: string;
   readonly logPath: string;
   readonly lockPath: string;
@@ -204,11 +189,7 @@ export class FileBus {
 
   /** Atomically attempt to claim a task. Returns a result (never throws on a
    *  lost race). For at-least-once safety, pass a stable `id`. */
-  async claim(
-    taskId: string,
-    agent: string,
-    opts: { note?: string; id?: string; meta?: Record<string, unknown> } = {},
-  ): Promise<ClaimResult> {
+  async claim(taskId: string, agent: string, opts: ClaimOptions = {}): Promise<ClaimResult> {
     try {
       const msg = await this.post({
         type: 'task.claimed',
@@ -227,16 +208,7 @@ export class FileBus {
     }
   }
 
-  async createTask(input: {
-    title: string;
-    agent: string;
-    taskId?: string;
-    description?: string;
-    priority?: 'low' | 'normal' | 'high';
-    tags?: string[];
-    id?: string;
-    meta?: Record<string, unknown>;
-  }): Promise<TaskCreatedMessage> {
+  async createTask(input: CreateTaskInput): Promise<TaskCreatedMessage> {
     const taskId = input.taskId ?? newId('task');
     const msg = await this.post({
       type: 'task.created',

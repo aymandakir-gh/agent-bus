@@ -5,6 +5,32 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The wire protocol is versioned
 separately as `agent-bus/N` (see [PROTOCOL.md](./PROTOCOL.md)).
 
+## [0.2.0] — 2026-06-16
+
+Transport conformance. The protocol wire format is unchanged (`agent-bus/0`,
+spec `0.1.0`); this release makes the *contract* portable across transports.
+
+### Added
+- **`BusTransport` interface** (`src/core/transport.ts`) — the single contract
+  any transport implements. `FileBus` now formally `implements BusTransport`.
+- **`HttpBusClient`** (`agent-bus` main export) — a fetch-only reference client
+  for the HTTP transport that maps HTTP error bodies back into the same typed
+  errors the core throws, so callers can't tell which transport raised them.
+- **Transport-conformance suite** (`test/conformance/`) — 46 behavioural cases
+  any transport must pass (envelope/`seq`/`ts`/`id` assignment, idempotency,
+  schema conformance of emitted messages, the full task FSM and every rejection
+  reason, single-claimer, total order, filters, derived task views, and
+  subscriptions). The **file and HTTP transports run the same suite** (92 cases),
+  so they cannot drift.
+- **`agent-bus/server` subpath export** so the server can be embedded without
+  pulling Fastify into the core entry.
+
+### Fixed
+- **HTTP graceful shutdown no longer hangs on open SSE subscriptions.** Found by
+  the conformance suite: `close()` waited indefinitely for never-ending event
+  streams. The server now tracks open SSE responses and destroys them on
+  shutdown (plus `forceCloseConnections`). Regression test in `test/http.test.ts`.
+
 ## [0.1.0] — 2026-06-16
 
 First release. Protocol `agent-bus/0`.
@@ -28,4 +54,5 @@ First release. Protocol `agent-bus/0`.
   multi-process concurrency simulation proving single-claimer & ordering.
 - **Example**: the two-terminal shared-folder demo (`examples/shared-folder`).
 
+[0.2.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.1.0

@@ -124,12 +124,66 @@ Each criterion maps to at least one test.
 - [ ] **AC-M3.4** `npx agent-bus` runs.
 
 ### M4 — Launch
-- [ ] README: one-liner, why, the shared-folder demo (with recording notes),
+- [x] README: one-liner, why, the shared-folder demo (with recording notes),
   quickstart, roadmap.
-- [ ] Two-terminal quickstart that coordinates via one folder (`examples/`).
-- [ ] `CONTRIBUTING.md`, schema docs, `CHANGELOG.md`.
-- [ ] Tagged release; schemas published as release artifacts; `npx agent-bus`
-  works from the published package.
+- [x] Two-terminal quickstart that coordinates via one folder (`examples/`).
+- [x] `CONTRIBUTING.md`, schema docs, `CHANGELOG.md`.
+- [x] Tagged release; schemas published as release artifacts; `npx agent-bus`
+  works from the published package. *(npm publish pending account 2FA.)*
+
+---
+
+## The road to v1.0.0
+
+v0.1.0 proved the protocol and the reference implementation. v1.0.0 makes the
+**contract** load-bearing across transports and languages, and proves the
+correctness claims at scale. Each milestone is its own release tag and must keep
+CI green. Decisions are recorded in `STATUS.md`.
+
+### M5 — Transport conformance suite → `v0.2.0`
+- The contract is expressed once as a **`BusTransport`** interface (`src/core/transport.ts`).
+- A single, transport-neutral **conformance suite** of **≥ 40 cases** any
+  transport must pass: envelope/`seq`/`ts`/`id` assignment, idempotency, schema
+  conformance of every emitted message, the full task FSM and every rejection
+  reason, single-claimer, total order, filters, derived task views, and
+  subscriptions.
+- **Both** the file transport (direct) and the HTTP transport (over the network,
+  via a new `HttpBusClient`) pass the **same** suite. (`test/conformance/`)
+
+### M6 — Concurrency at scale + a falsifiable lock → `v0.3.0`
+- **Incremental tail reads** (byte-offset cursor) so the bus is not O(n²) under a
+  large log — the enabler for the scaled simulation.
+- Simulation scaled to **≥ 8 OS processes over ≥ 1000 tasks**, asserting **zero
+  double-claims**, **gapless ordering**, **eventual completion**; run in CI,
+  **repeated ≥ 3× with different seeds** (seedable workers).
+- A deliberately **broken lock variant** (test-only, never reachable in prod) and
+  a test proving the *same* simulation **fails** on it — the invariants are
+  falsifiable, not vacuous. Production keeps the lock-steals-only-on-process-death
+  invariant.
+
+### M7 — A second-language client → `v0.4.0`
+- A minimal **Python reference client** (`clients/python/`) for the HTTP
+  transport, **validating against the published JSON Schemas** (no spec/impl
+  drift), proven against a live server **in CI**.
+
+### M8 — Versioned contract artifact → `v0.5.0`
+- JSON Schemas exported as a **versioned, bundled release artifact** for
+  cross-language consumers (`schemas/index.json` manifest + a single bundled
+  schema), with a test asserting the manifest version tracks `SPEC_VERSION`.
+- `PROTOCOL.md` carries an explicit **version field** and a **compatibility**
+  section (what is additive within `agent-bus/0`, what bumps the protocol id).
+
+### M9 — CLI, docs, demo → `v0.6.0`
+- CLI complete (`serve | post | tasks | watch`, plus the lifecycle verbs) with a
+  documented **two-terminals-one-folder quickstart** and a **vhs demo tape**.
+- Launch-grade README / CONTRIBUTING / CHANGELOG / issue & PR templates refreshed.
+
+### M10 — Adversarial review + v1.0.0 → `v1.0.0`
+- `src/core` line coverage **≥ 90%** and branch **≥ 80%**, enforced in CI;
+  **≥ 130** passing tests, no padding (reviewer-confirmed).
+- A **multi-agent adversarial review**; every real finding fixed with a
+  regression test. Publish-ready (`npm pack` clean). `npm publish` documented as
+  one manual `--otp` command (account 2FA; not run unattended).
 
 ## 8. Non-negotiable workflow (how we build this)
 
