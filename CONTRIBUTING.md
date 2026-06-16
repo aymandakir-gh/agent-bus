@@ -7,13 +7,20 @@ product, so changes start from the contract and are backed by tests.
 
 ```bash
 pnpm install
-pnpm build        # bundle (dual ESM/CJS) + types + CLI bin
-pnpm test         # vitest, incl. the concurrency simulation
-pnpm typecheck    # tsc --noEmit
-pnpm lint         # eslint
+pnpm build           # bundle (dual ESM/CJS) + types + CLI bin + server subpath
+pnpm test            # vitest: conformance (both transports) + scaled simulation
+pnpm test:coverage   # the same, with the src/core coverage gate (line ≥90 / branch ≥80)
+pnpm typecheck       # tsc --noEmit
+pnpm lint            # eslint
 ```
 
-Node ≥ 20, pnpm 9. The simulation spawns real child processes via `tsx`.
+Node ≥ 20, pnpm 9. The simulations spawn real child processes via `tsx`. The
+Python client has its own suite:
+
+```bash
+pnpm build && pip install -r clients/python/requirements-dev.txt
+python -m pytest clients/python   # validates the TS server against the schemas
+```
 
 ## The rules of the road
 
@@ -23,23 +30,31 @@ Node ≥ 20, pnpm 9. The simulation spawns real child processes via `tsx`.
    fails on any drift between source, `schemas/`, and the doc.
 2. **Every feature = an acceptance criterion + a test.** Add the criterion to
    `PRD.md` (M-numbered) and a test that covers it. See `test/` for the shape.
-3. **Never claim correctness without running the simulation.** Concurrency is a
+3. **A transport is defined by the conformance suite.** Any transport (file,
+   HTTP, a future one) must pass `test/conformance/` — the one shared suite. New
+   transport behaviour goes there so the transports can't drift.
+4. **Never claim correctness without running the simulation.** Concurrency is a
    first-class requirement — if you touch the lock, the FSM, or the write path,
-   `pnpm test test/concurrency.sim.test.ts test/lock.test.ts` must stay green
-   (run it a few times; it's designed to be deterministic).
-4. **The bus owns its data directory.** Never read or write outside the bus dir.
-5. **Validate the built artifact**, not just the test bundle — `node dist/cli.js`
+   `pnpm test test/concurrency.scale.sim.test.ts test/lock.test.ts` must stay
+   green. The simulation is *falsifiable* — it fails on a broken lock — so keep
+   that test honest.
+5. **The bus owns its data directory.** Never read or write outside the bus dir.
+   Keep the lock invariant: a lock is stolen only on provable holder death.
+6. **Validate the built artifact**, not just the test bundle — `node dist/cli.js`
    behaves differently from the vitest/esbuild path (e.g. ESM deep imports).
 
 ## Layout
 
 ```
-src/core/    message model (types), schemas, validation (ajv), FSM, lock, FileBus
-src/http/    Fastify transport over the core
-src/cli/     the CLI (node:util.parseArgs)
-src/scripts/ gen-schemas (artifact generator)
-test/        one file per concern + the simulation
-schemas/     generated, committed JSON Schemas (the published contract)
+src/core/        types, schemas, validation (ajv), FSM, lock, FileBus, BusTransport
+src/http/        Fastify server + fetch-only HttpBusClient over the core
+src/cli/         the CLI (node:util.parseArgs)
+src/scripts/     gen-schemas (artifacts) + bundle-schemas (release bundle)
+test/conformance/ the shared transport suite (file + HTTP)
+test/            FSM, file-bus, lock, HTTP, CLI, scaled concurrency simulation
+clients/python/  Python reference client + cross-language conformance tests
+schemas/         generated JSON Schemas + index.json manifest (the contract)
+demo/            a VHS tape of the headline flow
 ```
 
 The reference implementation validates with the *same* JSON Schema it publishes,

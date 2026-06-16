@@ -94,6 +94,21 @@ locally (the deliverable is the `.tape` script; CI does not render it).
 - Release step: attach `dist/agent-bus-schemas-<version>.json` to each GitHub
   release alongside the npm tarball and the individual schema files.
 
+### M9 — CLI, docs, demo → v0.6.0 (done ✅)
+
+- **CLI completeness** confirmed: `serve | post | tasks | watch` (+ init,
+  create-task, claim/complete/block/release/cancel, messages) all present and
+  exercised by `test/cli.test.ts`.
+- **vhs demo tape** `demo/agent-bus.tape` (+ `demo/README.md`): a single-pane
+  screencast of the headline flow (init → post → race → board green → log). Every
+  command in the tape was run and verified; the render needs `vhs` (not in CI).
+- **Two-terminal quickstart** lives in `examples/shared-folder/` (verified
+  end-to-end via `demo.sh`: 8 tasks / 3 workers / zero double-claims).
+- **GitHub templates** added (issue: bug + feature/protocol; PR checklist).
+- **README + CONTRIBUTING** refreshed to reflect `HttpBusClient`, the Python
+  client, the conformance suite, the scaled/falsifiable sim, and the schema
+  manifest. **192 tests green; docs-only changes.**
+
 ## 2026-06-16
 
 - **Bootstrap.** Repo initialized. Environment: Node 24, pnpm 9.15, gh authed as

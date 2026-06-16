@@ -150,17 +150,45 @@ curl -N localhost:7777/subscribe
 ```
 
 The HTTP layer is a thin wrapper over the same core, so it inherits every
-guarantee. It binds to `127.0.0.1` by default.
+guarantee. It binds to `127.0.0.1` by default. From TypeScript, talk to it with
+the bundled fetch-only client — same API surface as `FileBus`:
+
+```ts
+import { HttpBusClient } from 'agent-bus';
+
+const bus = new HttpBusClient({ baseUrl: 'http://127.0.0.1:7777' });
+await bus.createTask({ title: 'Ship it', agent: 'lead', taskId: 'ship' });
+const claim = await bus.claim('ship', 'worker-1');   // { ok: true } | { ok: false, reason: 'not_open' }
+```
+
+`FileBus` and `HttpBusClient` both implement the same `BusTransport` interface
+and are held to the **same conformance suite** ([`test/conformance/`](./test/conformance)),
+so they behave identically.
 
 ## Use it from another language
 
 The wire format is JSON Lines and the contract is published as JSON Schema
-(draft 2020-12) in [`schemas/`](./schemas). A worker in any language can:
+(draft 2020-12) in [`schemas/`](./schemas), discoverable via the versioned
+manifest [`schemas/index.json`](./schemas/index.json). A worker in any language
+can read `log.jsonl`, fold it into task states ([PROTOCOL.md §5](./PROTOCOL.md)),
+validate against the schemas, and append under the directory lock — or just talk
+to the HTTP endpoint.
 
-1. read `log.jsonl`, fold it into task states (see [PROTOCOL.md §5](./PROTOCOL.md)),
-2. validate messages against `schemas/message.schema.json`,
-3. append a `task.claimed` line **while holding the directory lock** (atomic
-   `O_CREAT|O_EXCL` create of `lock`) — or just POST to the HTTP endpoint.
+A **Python reference client** ships in [`clients/python/`](./clients/python),
+standard-library-only:
+
+```python
+from agentbus import AgentBusClient
+
+bus = AgentBusClient("http://127.0.0.1:7777")
+bus.create_task(title="Ship it", agent="lead", task_id="ship")
+res = bus.claim("ship", "worker-1")          # {"ok": True} | {"ok": False, "reason": "not_open"}
+for msg in bus.subscribe(from_seq=0):
+    print(msg["seq"], msg["type"]); break
+```
+
+Its tests validate the TypeScript server's output against the **published**
+schemas in CI — proof the contract is language-agnostic, not TS-only.
 
 ---
 
@@ -174,10 +202,13 @@ The wire format is JSON Lines and the contract is published as JSON Schema
   record — safe to retry.
 - **Append-only.** Nothing is mutated or deleted; the log is an audit trail.
 
-These aren't just asserted — they're **proven by a simulation** that spawns N
-agents in separate OS processes, all racing to claim/complete tasks over one file
-bus, and checks for zero double-claims, gapless ordering, and eventual
-completion (`test/concurrency.sim.test.ts`).
+These aren't just asserted — they're **proven by a simulation** that spawns **8
+agents in separate OS processes** racing to claim/complete **1000 tasks** over one
+file bus, repeated across multiple seeds, checking for zero double-claims, gapless
+ordering, and eventual completion (`test/concurrency.scale.sim.test.ts`). And the
+proof is **falsifiable**: the same simulation, run against a deliberately broken
+lock, fails — so the test isn't vacuous. Both transports additionally pass one
+shared [conformance suite](./test/conformance) (46 cases each).
 
 ## Privacy
 
@@ -189,26 +220,31 @@ default.
 
 ## Project status & layout
 
-Pre-1.0 (`agent-bus/0`), but feature-complete for v0 and fully tested.
+Protocol `agent-bus/0`, spec `0.1.0`. Two transports held to one conformance
+suite, a second-language client, and the concurrency guarantees proven at scale.
 
 ```
-PROTOCOL.md        the contract (message types, FSM, guarantees, versioning)
-schemas/           canonical JSON Schemas (the published contract)
-src/core/          message model, FSM, validation, atomic lock, FileBus
-src/http/          Fastify transport over the core
+PROTOCOL.md        the contract (message types, FSM, guarantees, versioning §8)
+schemas/           canonical JSON Schemas + index.json manifest (the contract)
+src/core/          message model, FSM, validation, atomic lock, FileBus, transport
+src/http/          Fastify server + fetch-only HttpBusClient over the core
 src/cli/           the agent-bus CLI
-test/              schema conformance, FSM, file-bus, lock, HTTP, CLI, simulation
-examples/          the shared-folder demo
+clients/python/    standard-library Python reference client + conformance tests
+test/conformance/  one suite both transports must pass
+test/              FSM, file-bus, lock, HTTP, CLI, scaled concurrency simulation
+examples/          the shared-folder demo (two terminals, one folder)
+demo/              a VHS tape of the headline flow
 ```
 
 See [STATUS.md](https://github.com/aymandakir-gh/agent-bus/blob/main/STATUS.md)
-for the build log and design decisions.
+for the build log and design decisions, and [demo/](./demo) for a recordable
+screencast tape.
 
 ## Roadmap
 
-Auth & namespaces · log compaction/retention · richer queries & indexes · client
-libraries in other languages · an optional networked transport with the same
-guarantees · a minimal web dashboard. Ideas and PRs welcome — see
+Auth & namespaces · log compaction/retention · richer queries & indexes · more
+client libraries (a Python client ships today) · an optional networked transport
+with the same guarantees · a minimal web dashboard. Ideas and PRs welcome — see
 [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License

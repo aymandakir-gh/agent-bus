@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The wire protocol is versioned
 separately as `agent-bus/N` (see [PROTOCOL.md](./PROTOCOL.md)).
 
+## [0.6.0] — 2026-06-16
+
+Launch polish: demo, docs, templates. Wire format unchanged (`agent-bus/0`).
+
+### Added
+- **VHS demo tape** (`demo/agent-bus.tape`, `demo/README.md`) recording the
+  headline flow — a folder becomes a bus, the lead posts work, workers race, the
+  board goes green, the log shows total order. Every command verified.
+- **GitHub templates** — issue templates (bug / feature-and-protocol-proposal)
+  and a PR template with the spec-driven checklist (conformance, drift, §8
+  compatibility, no-telemetry).
+
+### Changed
+- **README** refreshed: the `HttpBusClient`, the Python client, the shared
+  conformance suite, the scaled & falsifiable simulation, and the versioned
+  schema manifest are now all reflected, with updated layout and roadmap.
+- **CONTRIBUTING** updated for the conformance suite, the coverage gate, the
+  Python client tests, and the lock invariant.
+
 ## [0.5.0] — 2026-06-16
 
 A versioned contract artifact. Wire format unchanged (`agent-bus/0`, spec `0.1.0`).
@@ -113,6 +132,7 @@ First release. Protocol `agent-bus/0`.
   multi-process concurrency simulation proving single-claimer & ordering.
 - **Example**: the two-terminal shared-folder demo (`examples/shared-folder`).
 
+[0.6.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.6.0
 [0.5.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.5.0
 [0.4.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.4.0
 [0.3.0]: https://github.com/aymandakir-gh/agent-bus/releases/tag/v0.3.0

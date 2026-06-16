@@ -63,7 +63,9 @@ happens. Run `node dist/cli.js --dir ./shared tasks` anywhere to see the board.
 
 ## Recording notes
 
-The demo reads great as a short screen capture or asciinema cast:
+A ready-made [VHS](https://github.com/charmbracelet/vhs) tape of the headline
+flow lives in [`demo/agent-bus.tape`](../../demo/agent-bus.tape) — render it with
+`vhs demo/agent-bus.tape`. To capture this live multi-worker version instead:
 
 ```bash
 # install: https://asciinema.org
