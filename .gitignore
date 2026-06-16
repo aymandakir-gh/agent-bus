@@ -5,6 +5,7 @@ node_modules/
 # build output
 dist/
 *.tsbuildinfo
+*.tgz
 
 # test / coverage
 coverage/
