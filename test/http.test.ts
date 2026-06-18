@@ -192,4 +192,29 @@ describe('http: subscriptions (SSE)', () => {
     controller.abort();
     expect(got).toEqual([1, 2, 3]);
   });
+
+  it('sends heartbeat comment frames to keep an idle stream alive', async () => {
+    // A separate server with a fast heartbeat; no messages are posted, so only
+    // the ready frame and keepalive comments should arrive.
+    const d = await mkdtemp(join(tmpdir(), 'agent-bus-hb-'));
+    const server = await startServer({ dir: d, port: 0, sseHeartbeatMs: 30 });
+    try {
+      const controller = new AbortController();
+      const res = await fetch(server.url + '/subscribe?fromSeq=0', { signal: controller.signal });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const deadline = Date.now() + 2000;
+      while (!buffer.includes(': keepalive') && Date.now() < deadline) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+      }
+      controller.abort();
+      expect(buffer).toContain(': keepalive');
+    } finally {
+      await server.app.close();
+      await rm(d, { recursive: true, force: true });
+    }
+  });
 });
