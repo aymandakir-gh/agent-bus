@@ -20,6 +20,8 @@ import type { MessageInput, MessageType, TaskState } from '../core/types';
 export interface CreateServerOptions {
   bus: FileBus;
   logger?: boolean;
+  /** SSE keepalive interval (ms). Default 15000; set <=0 to disable. */
+  sseHeartbeatMs?: number;
 }
 
 function asArray<T>(v: T | T[] | undefined): T[] | undefined {
@@ -176,9 +178,11 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
     sseStreams.add(res);
 
     let closed = false;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     const close = (): void => {
       if (closed) return;
       closed = true;
+      if (heartbeat) clearInterval(heartbeat);
       sseStreams.delete(res);
       sub.close();
       try {
@@ -222,6 +226,18 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
       { fromSeq },
     );
 
+    // Heartbeat: SSE comment frames keep an idle stream alive through proxies /
+    // load balancers that would otherwise drop a connection with no traffic.
+    const heartbeatMs = options.sseHeartbeatMs ?? 15_000;
+    if (heartbeatMs > 0) {
+      heartbeat = setInterval(() => {
+        void write(': keepalive\n\n').then((ok) => {
+          if (!ok) close();
+        });
+      }, heartbeatMs);
+      heartbeat.unref?.();
+    }
+
     res.on('error', close);
     req.raw.on('close', close);
   });
@@ -261,6 +277,8 @@ export interface StartServerOptions {
   port?: number;
   host?: string;
   logger?: boolean;
+  /** SSE keepalive interval (ms). Default 15000; set <=0 to disable. */
+  sseHeartbeatMs?: number;
 }
 
 /** Initialize the bus directory and start listening. */
@@ -268,7 +286,7 @@ export async function startServer(
   options: StartServerOptions,
 ): Promise<{ app: FastifyInstance; url: string; bus: FileBus }> {
   const bus = await FileBus.init(options.dir);
-  const app = createServer({ bus, logger: options.logger });
+  const app = createServer({ bus, logger: options.logger, sseHeartbeatMs: options.sseHeartbeatMs });
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 7777;
   await app.listen({ host, port });
