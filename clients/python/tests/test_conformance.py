@@ -219,3 +219,34 @@ def test_subscribe_streams_in_order(client):
         if len(got) >= 3:
             break
     assert got == [1, 2, 3]
+
+
+def test_subscribe_survives_idle_gap_longer_than_request_timeout(client):
+    """An SSE stream must keep blocking through an idle window longer than the
+    short request timeout. The request timeout must not double as the per-read
+    socket timeout, or a quiet bus would drop the subscriber with TimeoutError.
+
+    Repro: a client with timeout=1s subscribing to an idle bus, with the first
+    message posted only at t+2s. Before the fix the generator dies after ~1s
+    with socket TimeoutError and delivers nothing.
+    """
+    import threading
+    import time
+
+    short = AgentBusClient(client.base_url, timeout=1.0)
+
+    def delayed_post():
+        time.sleep(2.0)  # > the 1.0s request timeout
+        client.post({"type": "status.update", "agent": "a", "text": "late"})
+
+    t = threading.Thread(target=delayed_post)
+    t.start()
+    try:
+        got = []
+        for m in short.subscribe(from_seq=0):
+            assert_valid(MESSAGE, m)
+            got.append(m["seq"])
+            break
+        assert got == [1]
+    finally:
+        t.join()
