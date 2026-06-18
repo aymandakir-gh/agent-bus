@@ -192,7 +192,12 @@ class AgentBusClient:
         underlying HTTP connection stays open; break out of the loop to close."""
         url = self.base_url + f"/subscribe?fromSeq={from_seq}"
         req = urllib.request.Request(url, headers={"Accept": "text/event-stream"})
-        resp = urllib.request.urlopen(req, timeout=self.timeout)
+        # SSE is a long-lived stream: ``self.timeout`` is the short per-call
+        # request timeout and must NOT be reused here, or each idle gap longer
+        # than it would raise socket ``TimeoutError`` and silently end the
+        # generator. Pass ``timeout=None`` so reads block until the next message
+        # (callers break out of the loop to close — see the docstring).
+        resp = urllib.request.urlopen(req, timeout=None)
         try:
             for raw in resp:
                 line = raw.decode("utf-8").rstrip("\n")
