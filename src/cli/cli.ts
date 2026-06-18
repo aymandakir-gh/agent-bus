@@ -91,8 +91,11 @@ function oneOf<T extends string>(
 /** Parse a non-negative integer flag; throw a clear error (caught at top level). */
 function intFlag(raw: string | undefined, name: string): number | undefined {
   if (raw === undefined) return undefined;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0) {
+  // Validate the literal text, not just Number(raw): Number() silently accepts
+  // hex ("0x10"→16), exponent ("1e3"→1000) and "" (→0), which are surprising for
+  // a --from/--limit/--port. Require plain decimal digits and a safe magnitude.
+  const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(n)) {
     throw new Error(`${name} must be a non-negative integer (got "${raw}")`);
   }
   return n;

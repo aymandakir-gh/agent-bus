@@ -102,6 +102,10 @@ describe('http: error mapping', () => {
     expect((await fetch(url + '/messages?fromSeq=abc')).status).toBe(400);
     expect((await fetch(url + '/messages?limit=-3')).status).toBe(400);
     expect((await fetch(url + '/subscribe?fromSeq=NaN')).status).toBe(400);
+    // Number() coercions that must NOT be silently accepted as integers.
+    expect((await fetch(url + '/messages?limit=0x10')).status).toBe(400); // hex
+    expect((await fetch(url + '/messages?fromSeq=1e3')).status).toBe(400); // exponent
+    expect((await fetch(url + '/messages?limit=')).status).toBe(400); // empty → was 0
   });
 
   it('400 (not 500) on a body-less task POST', async () => {
