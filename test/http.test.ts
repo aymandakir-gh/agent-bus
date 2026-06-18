@@ -103,6 +103,23 @@ describe('http: error mapping', () => {
     expect((await fetch(url + '/messages?limit=-3')).status).toBe(400);
     expect((await fetch(url + '/subscribe?fromSeq=NaN')).status).toBe(400);
   });
+
+  it('400 (not 500) on a body-less task POST', async () => {
+    // A client that omits the body (or content-type) must get a clean 4xx, not a
+    // 5xx from a TypeError reading `undefined.agent`. Every body-reading task
+    // handler tolerates a missing body and falls through to schema validation.
+    for (const path of [
+      '/tasks',
+      '/tasks/x/complete',
+      '/tasks/x/block',
+      '/tasks/x/release',
+      '/tasks/x/cancel',
+    ]) {
+      const res = await fetch(url + path, { method: 'POST' });
+      expect(res.status, `${path} should be 400`).toBe(400);
+      expect(await res.json(), `${path} body`).toMatchObject({ error: 'validation' });
+    }
+  });
 });
 
 describe('http: single-claimer over the network path', () => {

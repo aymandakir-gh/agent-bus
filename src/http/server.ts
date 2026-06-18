@@ -97,7 +97,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
   });
 
   app.post('/tasks', async (req, reply) => {
-    const b = req.body as {
+    const b = (req.body ?? {}) as {
       title: string;
       agent: string;
       taskId?: string;
@@ -127,7 +127,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
 
   app.post('/tasks/:id/complete', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const b = req.body as { agent: string; result?: unknown; note?: string };
+    const b = (req.body ?? {}) as { agent: string; result?: unknown; note?: string };
     const msg = await bus.complete(id, b.agent, b.result, b.note);
     reply.code(201);
     return msg;
@@ -135,7 +135,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
 
   app.post('/tasks/:id/block', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const b = req.body as { agent: string; reason: string; note?: string };
+    const b = (req.body ?? {}) as { agent: string; reason: string; note?: string };
     const msg = await bus.block(id, b.agent, b.reason, b.note);
     reply.code(201);
     return msg;
@@ -143,7 +143,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
 
   app.post('/tasks/:id/release', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const b = req.body as { agent: string; reason?: string };
+    const b = (req.body ?? {}) as { agent: string; reason?: string };
     const msg = await bus.release(id, b.agent, b.reason);
     reply.code(201);
     return msg;
@@ -151,7 +151,7 @@ export function createServer(options: CreateServerOptions): FastifyInstance {
 
   app.post('/tasks/:id/cancel', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const b = req.body as { agent: string; reason?: string };
+    const b = (req.body ?? {}) as { agent: string; reason?: string };
     const msg = await bus.cancel(id, b.agent, b.reason);
     reply.code(201);
     return msg;
