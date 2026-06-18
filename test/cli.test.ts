@@ -84,6 +84,15 @@ describe('cli: end-to-end over a folder', () => {
     expect(r.stderr).toContain('--from');
   });
 
+  it('rejects hex/exponent numeric flags rather than coercing them', () => {
+    // Number("0x10")===16 and Number("1e3")===1000 — surprising for --limit.
+    for (const bad of ['0x10', '1e3']) {
+      const r = cli('messages', '--limit', bad);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('--limit');
+    }
+  });
+
   it('reports invalid JSON in --result clearly', () => {
     cli('create-task', '--title', 'X', '--agent', 'lead', '--task', 't1');
     cli('claim', 't1', '--agent', 'w1');

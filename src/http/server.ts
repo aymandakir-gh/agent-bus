@@ -31,8 +31,11 @@ function asArray<T>(v: T | T[] | undefined): T[] | undefined {
 function intParam(value: string | string[] | undefined, name: string): number | undefined {
   if (value === undefined) return undefined;
   const raw = Array.isArray(value) ? value[0] : value;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0) {
+  // Validate the literal text, not just Number(raw): Number() silently accepts
+  // hex ("0x10"→16), exponent ("1e3"→1000) and "" (→0), which are surprising
+  // for a seq/limit. Require plain decimal digits and a safe-integer magnitude.
+  const n = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(n)) {
     throw new ValidationError(`query parameter "${name}" must be a non-negative integer`, [
       `${name}=${String(raw)}`,
     ]);
