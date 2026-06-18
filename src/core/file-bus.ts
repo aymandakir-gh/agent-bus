@@ -16,7 +16,7 @@ import { acquireLock, type AcquireLockFn, type LockOptions } from './lock';
 import { applyTransition, classifyTransition } from './fsm';
 import { newId } from './ids';
 import { assertValidInput, assertValidMessage } from './validate';
-import { BusError, TransitionError } from './errors';
+import { BusError, TransitionError, ValidationError } from './errors';
 import { MESSAGE_TYPES } from './types';
 import type {
   Message,
@@ -52,6 +52,15 @@ const LOG_FILE = 'log.jsonl';
 const LOCK_FILE = 'lock';
 const META_FILE = 'meta.json';
 const NEWLINE = 0x0a;
+
+/**
+ * Hard ceiling on a single message's serialized size (1 MiB). The free-form
+ * `result`/`meta`/`data` fields are otherwise unbounded, so one client could
+ * append a multi-megabyte record — bloating the append-only log on disk and the
+ * in-memory cache every reader holds. Coordination messages are tiny; this cap
+ * is generous while keeping a single message from degrading the whole bus.
+ */
+export const MAX_MESSAGE_BYTES = 1_048_576;
 
 export interface FileBusOptions {
   /** The bus directory. The bus reads and writes only inside it. */
@@ -164,6 +173,16 @@ export class FileBus implements BusTransport {
    *  task FSM, assigns `id`/`seq`/`ts`, and appends one line — atomically. */
   async post(input: MessageInput): Promise<Message> {
     assertValidInput(input);
+    // Bound total message size before doing any work: the free-form fields are
+    // schema-unbounded, so reject an oversized payload rather than commit it to
+    // the log and every reader's cache. Checked pre-lock so it fails fast.
+    const bytes = Buffer.byteLength(JSON.stringify(input), 'utf8');
+    if (bytes > MAX_MESSAGE_BYTES) {
+      throw new ValidationError(
+        `message exceeds the ${MAX_MESSAGE_BYTES}-byte limit (got ${bytes})`,
+        [`size=${bytes}>${MAX_MESSAGE_BYTES}`],
+      );
+    }
     const maxAttempts = 50;
     for (let attempt = 1; ; attempt++) {
       const handle = await this.acquire(this.lockPath, this.lockOptions);

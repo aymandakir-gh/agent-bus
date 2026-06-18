@@ -3,7 +3,7 @@ import { mkdtemp, rm, readFile, writeFile, appendFile, readdir } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FileBus } from '../src/core/file-bus';
+import { FileBus, MAX_MESSAGE_BYTES } from '../src/core/file-bus';
 import { ValidationError } from '../src/core/errors';
 
 let dir: string;
@@ -64,6 +64,27 @@ describe('FileBus: post & read', () => {
       bus.post({ type: 'task.created', agent: 'a', taskId: 't1' } as never),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(await bus.getMessages()).toHaveLength(0);
+  });
+
+  it('rejects an over-cap message (unbounded data field) and writes nothing', async () => {
+    // `data` is schema-free, so this passes shape validation but exceeds the
+    // byte cap — it must be refused, not appended to the log/cache.
+    const blob = 'A'.repeat(MAX_MESSAGE_BYTES);
+    await expect(
+      bus.post({ type: 'status.update', agent: 'a', text: 'hi', data: { blob } } as never),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(await bus.getMessages()).toHaveLength(0);
+  });
+
+  it('accepts a normal-sized message with a small data field', async () => {
+    const msg = await bus.post({
+      type: 'status.update',
+      agent: 'a',
+      text: 'small',
+      data: { ok: true },
+    } as never);
+    expect(msg.seq).toBeGreaterThan(0);
+    expect(await bus.getMessages()).toHaveLength(1);
   });
 
   it('filters messages by type, task, agent, fromSeq, limit', async () => {
