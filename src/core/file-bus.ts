@@ -345,15 +345,26 @@ export class FileBus implements BusTransport {
         // during an `await handler(...)`; newly-appended messages are delivered
         // on the next tick instead.
         const len = messages.length;
-        for (let i = 0; i < len; i++) {
+        // `messages` is append-only and strictly ordered by `seq`, so binary-
+        // search the first index past the cursor instead of re-scanning the
+        // whole prefix every tick — that was O(n) per tick per subscriber, so a
+        // bus with many messages and a near-tail cursor burned O(n) work every
+        // poll just to skip already-delivered entries. Steady state is now
+        // O(log n + new).
+        let lo = 0;
+        let hi = len;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if (messages[mid]!.seq > cursor) hi = mid;
+          else lo = mid + 1;
+        }
+        for (let i = lo; i < len; i++) {
           if (closed) break;
           const m = messages[i]!;
-          if (m.seq > cursor) {
-            // Advance the cursor only after the handler succeeds, so a throwing
-            // handler is retried on the next tick (at-least-once delivery, G5).
-            await handler(m);
-            cursor = m.seq;
-          }
+          // Advance the cursor only after the handler succeeds, so a throwing
+          // handler is retried on the next tick (at-least-once delivery, G5).
+          await handler(m);
+          cursor = m.seq;
         }
       } catch {
         // transient read error; next tick retries

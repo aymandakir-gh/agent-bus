@@ -238,4 +238,26 @@ describe('FileBus: subscriptions', () => {
     expect(seen).toEqual([1]);
     expect(failedOnce).toBe(true);
   });
+
+  it('resumes mid-stream from a cursor without redelivering the prefix', async () => {
+    // Pre-load a backlog so the cursor sits well inside the log; the binary-
+    // search resume must skip seq 1..5 and deliver only the tail in order.
+    for (let i = 0; i < 8; i++) {
+      await bus.post({ type: 'status.update', agent: 'a', text: `m${i + 1}` }); // seq 1..8
+    }
+    const received: number[] = [];
+    await new Promise<void>((resolve) => {
+      const sub = bus.subscribe(
+        (m) => {
+          received.push(m.seq);
+          if (m.seq >= 8) {
+            sub.close();
+            resolve();
+          }
+        },
+        { fromSeq: 5, intervalMs: 20 },
+      );
+    });
+    expect(received).toEqual([6, 7, 8]);
+  });
 });
